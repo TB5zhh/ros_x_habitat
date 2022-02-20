@@ -16,6 +16,9 @@
 		<remap from="image" to="depth"/>
 	</node>
 	
+	<node pkg="image_view" type="image_view" name="image_view_third">
+		<remap from="image" to="/third_rgb"/>
+	</node>
 	
 
 	<!--node pkg="rqt_graph" type="rqt_graph" name="rqt_graph"/-->
