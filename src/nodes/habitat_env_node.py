@@ -1029,13 +1029,13 @@ class HabitatEnvNode:
                 vy = (odom_y - self.prev_odom[1])/(self.current_time - self.last_time).to_sec()
                 vth = (odom_th - self.prev_odom[2])/(self.current_time - self.last_time).to_sec()
 
-                self.odom_broadcaster.sendTransform(
-                    (odom_x, odom_y, 0.),
-                    odom_quat,
-                    self.current_time,
-                    "base_link",
-                    "odom"
-                )
+                #self.odom_broadcaster.sendTransform(
+                #    (odom_x, odom_y, 0.),
+                #    odom_quat,
+                #    self.current_time,
+                #    "base_link",
+                #    "odom"
+                #)
 
                 if self.counter % 3 == 1:
                     odom = Odometry()
