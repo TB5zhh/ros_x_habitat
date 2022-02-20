@@ -69,7 +69,7 @@ class JoyHabitatRoamer:
             rospy.wait_for_service(self.roam_service_name)
             try:
                 resp = self.roam(
-                    episode_id_last, scene_id_last, True, self.video_frame_period
+                    episode_id_last, scene_id_last, False, self.video_frame_period
                 )
                 assert resp.ack
             except rospy.ServiceException:
