@@ -119,10 +119,10 @@ class HabitatEnvNode:
         self.sim.robot.sim_obj.translate(mn.Vector3(self.robot_init_pos[0], 0.045, self.robot_init_pos[2]))
         self.sim.robot.sim_obj.rotate_y(mn.Rad(self.robot_init_ang))
         self.last_angular_velocity=0.0
-        self.goal_position=np.matrix([[5.0], [0.0], [0.0], [1.0]])
+        self.goal_position=np.matrix([[self.robot_init_pos[0]], [0.0], [self.robot_init_pos[2]], [1.0]])
         self.goal_rotation=mn.Quaternion(mn.Vector3(0.0, 0.0, 0.0), 0.0)
-        self.last_position_x = self.robot_init_pos[0]
-        self.last_position_y = self.robot_init_pos[2]
+        self.last_position_x = self.robot_init_pos[2]
+        self.last_position_y = self.robot_init_pos[0]
         self.last_th = self.sim.robot.base_rot
         self.last_linear_velocity_x=0.0
         self.last_linear_velocity_y=0.0
@@ -968,6 +968,8 @@ class HabitatEnvNode:
                 self.last_linear_velocity_y=linear_velocity_y
 
                 gps_msg = PointGoalWithGPSCompass()
+                gps_msg.header.stamp= self.current_time
+                gps_msg.header.frame_id = "gps"
                 angle_env2base=th_world+self.map_orientation
                 rotation_x = self.rotation_x(-np.pi/2)
                 rotation_z = self.rotation_z(th_map+self.map_orientation)
