@@ -234,6 +234,9 @@ class HabitatEnvNode:
         if "HEAD_RGB_SENSOR" in self.config.SIMULATOR.AGENT_0.SENSORS:
             self.pub_rgb = rospy.Publisher("/camera/color/image_raw", Image, queue_size=self.pub_queue_size)
             self.pub_third_rgb = rospy.Publisher("third_rgb", Image, queue_size=self.pub_queue_size)
+            self.pub_camera_info_rgb = rospy.Publisher(
+                    "/camera/color/camera_info", CameraInfo, queue_size=self.pub_queue_size
+                )
         if "HEAD_DEPTH_SENSOR" in self.config.SIMULATOR.AGENT_0.SENSORS:
             if self.use_continuous_agent:
                 # if we are using a ROS-based agent, we publish depth images
@@ -242,8 +245,8 @@ class HabitatEnvNode:
                     "/camera/aligned_depth_to_color/image_raw", Image, queue_size=self.pub_queue_size
                 )
                 # also publish depth camera info
-                self.pub_camera_info = rospy.Publisher(
-                    "/camera/color/camera_info", CameraInfo, queue_size=self.pub_queue_size
+                self.pub_camera_info_depth = rospy.Publisher(
+                    "/camera/aligned_depth_to_color/camera_info", CameraInfo, queue_size=self.pub_queue_size
                 )
             else:
                 # otherwise, we publish in type DepthImage to preserve as much
@@ -545,7 +548,14 @@ class HabitatEnvNode:
             elif sensor_uuid == "robot_head_depth":
                 self.pub_depth.publish(observations_ros["robot_head_depth"])
                 if self.use_continuous_agent:
-                    self.pub_camera_info.publish(
+                    self.pub_camera_info_rgb.publish(
+                        self.make_depth_camera_info_msg(
+                            observations_ros["robot_head_depth"].header,
+                            observations_ros["robot_head_depth"].height,
+                            observations_ros["robot_head_depth"].width,
+                        )
+                    )
+                    self.pub_camera_info_depth.publish(
                         self.make_depth_camera_info_msg(
                             observations_ros["robot_head_depth"].header,
                             observations_ros["robot_head_depth"].height,
