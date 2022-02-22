@@ -121,8 +121,8 @@ class HabitatEnvNode:
         self.last_angular_velocity=0.0
         self.goal_position=np.matrix([[5.0], [0.0], [0.0], [1.0]])
         self.goal_rotation=mn.Quaternion(mn.Vector3(0.0, 0.0, 0.0), 0.0)
-        self.last_position_x = 4.4
-        self.last_position_y = 3.6
+        self.last_position_x = self.robot_init_pos[0]
+        self.last_position_y = self.robot_init_pos[2]
         self.last_th = self.sim.robot.base_rot
         self.last_linear_velocity_x=0.0
         self.last_linear_velocity_y=0.0
@@ -232,18 +232,18 @@ class HabitatEnvNode:
         # we create one topic for each of RGB, Depth and GPS+Compass
         # sensor
         if "HEAD_RGB_SENSOR" in self.config.SIMULATOR.AGENT_0.SENSORS:
-            self.pub_rgb = rospy.Publisher("rgb", Image, queue_size=self.pub_queue_size)
+            self.pub_rgb = rospy.Publisher("/camera/color/image_raw", Image, queue_size=self.pub_queue_size)
             self.pub_third_rgb = rospy.Publisher("third_rgb", Image, queue_size=self.pub_queue_size)
         if "HEAD_DEPTH_SENSOR" in self.config.SIMULATOR.AGENT_0.SENSORS:
             if self.use_continuous_agent:
                 # if we are using a ROS-based agent, we publish depth images
                 # in type Image
                 self.pub_depth = rospy.Publisher(
-                    "depth", Image, queue_size=self.pub_queue_size
+                    "/camera/aligned_depth_to_color/image_raw", Image, queue_size=self.pub_queue_size
                 )
                 # also publish depth camera info
                 self.pub_camera_info = rospy.Publisher(
-                    "camera_info", CameraInfo, queue_size=self.pub_queue_size
+                    "/camera/color/camera_info", CameraInfo, queue_size=self.pub_queue_size
                 )
             else:
                 # otherwise, we publish in type DepthImage to preserve as much
@@ -642,6 +642,31 @@ class HabitatEnvNode:
 
                 #time_start = rospy.Time.now()
 
+                x=self.sim.robot.sim_obj.rotation.vector.x
+                y=self.sim.robot.sim_obj.rotation.vector.y
+                z=self.sim.robot.sim_obj.rotation.vector.z
+                w=self.sim.robot.sim_obj.rotation.scalar
+
+                r = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
+                r = r / math.pi * 180
+                self.pitch_divide2 = math.asin((w * y - z * x))
+                self.pitch_divide2 = self.pitch_divide2 / math.pi * 180
+                y = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+                y = y / math.pi * 180
+
+#                self.sim.robot.sim_obj.root_linear_velocity
+                time_change=rospy.Time.now().to_sec()-self.last_time.to_sec()
+
+                #angular in world 0-pi*4/3, pi*2/3-0
+                th_world = float(self.sim.robot.base_rot)
+                if self.pitch_divide2<0 and float(th_world)<np.pi*2/3 :
+                    th_world=-th_world+2*np.pi#0-2pi
+
+                #angular in map(star from init orientation) -pi/2-pi*3/2
+                th_map = float(th_world)-self.map_orientation
+                if th_map<0 :
+                    th_map=th_map+np.pi*2#0-2pi
+
                 vel_control = habitat_sim.physics.VelocityControl()
                 vel_control.controlling_lin_vel = True
                 vel_control.controlling_ang_vel = True
@@ -759,13 +784,6 @@ class HabitatEnvNode:
                         closest_obj_pos = scene_obj_pos[closest_obj_idx]
                         to_target = np.linalg.norm(ee_pos - closest_obj_pos, ord=2)
                         sim_idx = self.sim.scene_obj_ids[closest_obj_idx]
-                        print(scene_obj_pos[0])
-                        print(closest_obj_idx)
-                        print("pos0: ", scene_obj_pos[0])
-                        print("pos1: ", scene_obj_pos[1])
-                        print("to target 0: ", np.linalg.norm(ee_pos - scene_obj_pos[0], ord=2))
-                        print("to target 1: ", to_target)
-                        print("###########################################")
                         if to_target < 0.15:
                             self.sim.grasp_mgr.snap_to_obj(sim_idx)
                             grip_state = Point()
@@ -789,21 +807,16 @@ class HabitatEnvNode:
                 self.counter += 1
 
                 move_step = [0, 0, 0]
+                trans_mat = np.mat([[math.cos(th_world), 0, math.sin(th_world)], [0, 1, 0], [-math.sin(th_world), 0, math.cos(th_world)]])
                 if self.move_pos == [0, 0, 0]:
                     pass
                 elif not self.curr_pos == self.move_pos:
                     move_step[0] = np.clip(self.move_pos[0] - self.curr_pos[0], -0.005, 0.005)
                     move_step[1] = np.clip(self.move_pos[1] - self.curr_pos[1], -0.005, 0.005)
                     move_step[2] = np.clip(self.move_pos[2] - self.curr_pos[2], -0.01, 0.01)
-                    self.sim.robot.sim_obj.translate(
-                        mn.Vector3(
-                            (move_step[0] * self.sim.robot.sim_obj.transformation[0][0]
-                                + move_step[1] * self.sim.robot.sim_obj.transformation[2][0]),
-                            0,
-                            (-move_step[0] * self.sim.robot.sim_obj.transformation[2][0]
-                                + move_step[1] * self.sim.robot.sim_obj.transformation[0][0])
-                        )
-                    )
+                    move_step_mat = np.mat([[move_step[0]], [0], [move_step[1]]])
+                    trans_move_step = trans_mat*move_step_mat
+                    self.sim.robot.sim_obj.translate(mn.Vector3(trans_move_step[0, 0], trans_move_step[1, 0], trans_move_step[2, 0]))
                     self.sim.robot.sim_obj.rotate_y(mn.Rad(move_step[2]))
                     self.curr_pos = [self.curr_pos[0] + move_step[0], self.curr_pos[1] + move_step[1], self.curr_pos[2] + move_step[2]]
                 else:
@@ -824,47 +837,24 @@ class HabitatEnvNode:
 
                 #time_start = rospy.Time.now()
 
-                x=self.sim.robot.sim_obj.rotation.vector.x
-                y=self.sim.robot.sim_obj.rotation.vector.y
-                z=self.sim.robot.sim_obj.rotation.vector.z
-                w=self.sim.robot.sim_obj.rotation.scalar
-
-                r = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
-                r = r / math.pi * 180
-                self.pitch_divide2 = math.asin((w * y - z * x))
-                self.pitch_divide2 = self.pitch_divide2 / math.pi * 180
-                y = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
-                y = y / math.pi * 180
-
-#                self.sim.robot.sim_obj.root_linear_velocity
-                time_change=rospy.Time.now().to_sec()-self.last_time.to_sec()
-
-                #angular in world 0-pi*4/3, pi*2/3-0
-                th_world = float(self.sim.robot.base_rot)
-                if self.pitch_divide2<0 and float(th_world)<np.pi*2/3 :
-                    th_world=-th_world+2*np.pi#0-2pi
-
-                #angular in map(star from init orientation) -pi/2-pi*3/2
-                th_map = float(th_world)-self.map_orientation
-                if th_map<0 :
-                    th_map=th_map+np.pi*2#0-2pi
-
-
                 if self.counter % 3 == 0:
-                    num_readings=int(360*5.4)
+                    num_readings=760
                     scan = LaserScan()
                     scan.header.stamp = self.current_time
                     scan.header.frame_id = "laser_link"
                     scan.angle_min = -np.pi
                     scan.angle_max = np.pi
-                    scan.angle_increment = 2*3.14 / num_readings
-                    scan.time_increment = 1/self.pub_rate/num_readings
+                    scan.angle_increment = 2*np.pi / num_readings
+                    scan.time_increment = 1*3/self.pub_rate/num_readings
                     scan.range_min = 0.15
-                    scan.range_max = 20.0
+                    scan.range_max = 12.0
                     ray = habitat_sim.geo.Ray()
-                    ray.origin = mn.Vector3(self.sim.robot.sim_obj.transformation[3][0]+0.15, 0.15,self.sim.robot.sim_obj.transformation[3][2]+0.135)
+                    origin = np.mat([[0.12], [0.08], [0]])
 
-                    for i in range(int((360)*5.4)+1,int((0)*5.4),-1):
+                    origin = trans_mat*origin
+                    ray.origin = mn.Vector3(origin[0, 0]+self.sim.robot.sim_obj.transformation[3][0], origin[1, 0], origin[2, 0]+self.sim.robot.sim_obj.transformation[3][2])
+
+                    for i in range(num_readings+1,0,-1):
                         ray.direction = mn.Vector3(math.cos(i/num_readings*2*np.pi-th_world),0,math.sin(i/num_readings*np.pi*2-th_world))
                         #print(ray.direction)
                         raycast_results = self.sim.cast_ray(ray, 100)
@@ -873,7 +863,7 @@ class HabitatEnvNode:
     #                		print(ray.origin)
                             scan.ranges.append(raycast_results.hits[0].ray_distance)
                     #give up 90 angle behind
-                    for i in range(int((135)*5.4),int((225)*5.4), 1):
+                    for i in range(int(num_readings*0.375),int(num_readings*0.625), 1):
                         j=i
 
                         if i>(num_readings-1) :
@@ -1028,6 +1018,13 @@ class HabitatEnvNode:
                 vx = (odom_x - self.prev_odom[0])/(self.current_time - self.last_time).to_sec()
                 vy = (odom_y - self.prev_odom[1])/(self.current_time - self.last_time).to_sec()
                 vth = (odom_th - self.prev_odom[2])/(self.current_time - self.last_time).to_sec()
+
+                vel_mat = np.mat([[vx], [vy], [0]])
+                vel_trans_mat = np.mat([[math.cos(th_map), math.sin(th_map), 0], [-math.sin(th_map), math.cos(th_map), 0], [0, 0, 1]])
+                vel_trans = vel_trans_mat*vel_mat
+
+                vx = vel_trans[0, 0]
+                vy = vel_trans[1, 0]
 
                 #self.odom_broadcaster.sendTransform(
                 #    (odom_x, odom_y, 0.),
