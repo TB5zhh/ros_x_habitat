@@ -859,7 +859,7 @@ class HabitatEnvNode:
                     scan.range_min = 0.15
                     scan.range_max = 12.0
                     ray = habitat_sim.geo.Ray()
-                    origin = np.mat([[0.12], [0.08], [0]])
+                    origin = np.mat([[0.12], [0.15], [0]])
 
                     origin = trans_mat*origin
                     ray.origin = mn.Vector3(origin[0, 0]+self.sim.robot.sim_obj.transformation[3][0], origin[1, 0], origin[2, 0]+self.sim.robot.sim_obj.transformation[3][2])
