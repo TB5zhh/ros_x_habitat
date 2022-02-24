@@ -526,7 +526,7 @@ class HabitatEnvNode:
             if sensor_uuid in ["robot_head_rgb", "robot_arm_rgb", "robot_head_depth", "pointgoal_with_gps_compass"]:
                 h = Header()
                 h.stamp = t_curr
-                h.frame_id = 'laser'
+                h.frame_id = 'camera_color_optical_frame'
                 sensor_msg.header = h
                 observations_ros[sensor_uuid] = sensor_msg
 
