@@ -114,7 +114,7 @@ class HabitatEnvNode:
         # define environment
         self.sim = make_sim(id_sim=self.config.SIMULATOR.TYPE, config=self.config.SIMULATOR)
         self.sim.reconfigure(config=self.config.SIMULATOR)
-        self.robot_init_pos = [4.40, 0, 3.60]
+        self.robot_init_pos = [4.20, 0, 3.50]
         self.robot_init_ang = math.pi/2.0
         self.sim.robot.sim_obj.translate(mn.Vector3(self.robot_init_pos[0], 0.045, self.robot_init_pos[2]))
         self.sim.robot.sim_obj.rotate_y(mn.Rad(self.robot_init_ang))
