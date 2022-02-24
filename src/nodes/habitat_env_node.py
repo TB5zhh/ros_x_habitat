@@ -121,8 +121,8 @@ class HabitatEnvNode:
         self.last_angular_velocity=0.0
         self.goal_position=np.matrix([[self.robot_init_pos[0]], [0.0], [self.robot_init_pos[2]], [1.0]])
         self.goal_rotation=mn.Quaternion(mn.Vector3(0.0, 0.0, 0.0), 0.0)
-        self.last_position_x = self.robot_init_pos[2]
-        self.last_position_y = self.robot_init_pos[0]
+        self.last_position_x = self.robot_init_pos[0]
+        self.last_position_y = self.robot_init_pos[2]
         self.last_th = self.sim.robot.base_rot
         self.last_linear_velocity_x=0.0
         self.last_linear_velocity_y=0.0
@@ -926,21 +926,25 @@ class HabitatEnvNode:
 
                 angular_change=th_world-float(self.last_th)
 
-                imu_data.orientation.x=self.sim.robot.sim_obj.rotation.vector.x
-                imu_data.orientation.y=self.sim.robot.sim_obj.rotation.vector.y
-                imu_data.orientation.z=self.sim.robot.sim_obj.rotation.vector.z
-                imu_data.orientation.w=self.sim.robot.sim_obj.rotation.scalar
+                imu_quat = tf.transformations.quaternion_from_euler(0, 0, th_map)
+                imu_data.orientation=Quaternion(*imu_quat)
 
-                y_position_change=-(self.sim.robot.sim_obj.transformation[3][0]-self.last_position_y)
-                x_position_change=-(self.sim.robot.sim_obj.transformation[3][2]-self.last_position_x)
+                x_position_change=self.sim.robot.sim_obj.transformation[3][0]-self.last_position_x
+                y_position_change=self.sim.robot.sim_obj.transformation[3][2]-self.last_position_y
 
-                linear_acceleration_y_map=y_position_change*self.pub_rate
-                linear_acceleration_x_map=x_position_change*self.pub_rate
-                linear_velocity_x=(linear_acceleration_x_map*math.cos(th_map)+linear_acceleration_y_map*math.sin(th_map))
-                linear_velocity_y=(linear_acceleration_y_map*math.cos(th_map)-linear_acceleration_x_map*math.sin(th_map))
+                #linear_velocity_x_world=x_position_change*self.pub_rate
+                #linear_velocity_y_world=y_position_change*self.pub_rate
+                #linear_velocity_x=(linear_velocity_x_world*math.cos(th_world)+linear_velocity_y_world*math.sin(th_world))
+                #linear_velocity_y=(linear_velocity_y_world*math.cos(th_world)-linear_velocity_x_world*math.sin(th_world))
+                transformation_mat = np.mat([[math.cos(th_world), 0, -math.sin(th_world)], [-math.sin(th_world), 0, -math.cos(th_world)], [0, 1, 0]])
+
+                world_linear_vel_mat = np.mat([[x_position_change*self.pub_rate], [0], [y_position_change*self.pub_rate]])
+                world_linear_vel_trans = transformation_mat * world_linear_vel_mat
+                linear_velocity_x=world_linear_vel_trans[0, 0]
+                linear_velocity_y=world_linear_vel_trans[1, 0]
                 imu_data.linear_acceleration.x = (linear_velocity_x-self.last_linear_velocity_x)*self.pub_rate
                 imu_data.linear_acceleration.y = (linear_velocity_y-self.last_linear_velocity_y)*self.pub_rate
-                imu_data.linear_acceleration.z = 9.8
+                imu_data.linear_acceleration.z = 9.8  #TODO: check real imu linear acceleration z
 
                 imu_data.angular_velocity.x = 0
                 imu_data.angular_velocity.y = 0
@@ -962,8 +966,8 @@ class HabitatEnvNode:
 
                 self.last_th = th_world
                 self.last_angular_velocity=imu_data.angular_velocity.z
-                self.last_position_x = self.sim.robot.sim_obj.transformation[3][2]
-                self.last_position_y = self.sim.robot.sim_obj.transformation[3][0]
+                self.last_position_x = self.sim.robot.sim_obj.transformation[3][0]
+                self.last_position_y = self.sim.robot.sim_obj.transformation[3][2]
                 self.last_linear_velocity_x=linear_velocity_x
                 self.last_linear_velocity_y=linear_velocity_y
 
