@@ -284,6 +284,7 @@ class HabitatEnvNode:
         self.target_pos_1 = rospy.Publisher("/position/target_1", Pose, queue_size=self.pub_queue_size)
         self.target_pos_2 = rospy.Publisher("/position/target_2", Pose, queue_size=self.pub_queue_size)
         self.target_pos_3 = rospy.Publisher("/position/target_3", Pose, queue_size=self.pub_queue_size)
+        self.ep_pos = rospy.Publisher("/position/ep_world", Pose, queue_size=self.pub_queue_size)
 
         # subscribe from command topics
         if self.use_continuous_agent:
@@ -315,7 +316,7 @@ class HabitatEnvNode:
             or self.pub_pointgoal_with_gps_compass.get_num_connections() == 0
         ):
             pass
-        self.goal_sub=rospy.Subscriber("move_base/goal", MoveBaseActionGoal ,self.callback_gps,queue_size=self.sub_queue_size)
+        self.goal_sub=rospy.Subscriber("gps/goal", MoveBaseActionGoal ,self.callback_gps,queue_size=self.sub_queue_size)
         self.logger.info("env initialized")
 
     def reset(self):
@@ -1184,6 +1185,16 @@ class HabitatEnvNode:
                 pose_target_3.orientation.z = rot_box.vector.z
                 pose_target_3.orientation.w = rot_box.scalar
                 self.target_pos_3.publish(pose_target_3)
+
+                pose_ep = Pose()
+                pose_ep.position.x = self.sim.robot.sim_obj.translation.x
+                pose_ep.position.y = self.sim.robot.sim_obj.translation.y
+                pose_ep.position.z = self.sim.robot.sim_obj.translation.z
+                pose_ep.orientation.x = self.sim.robot.sim_obj.rotation.vector.x
+                pose_ep.orientation.y = self.sim.robot.sim_obj.rotation.vector.y
+                pose_ep.orientation.z = self.sim.robot.sim_obj.rotation.vector.z
+                pose_ep.orientation.w = self.sim.robot.sim_obj.rotation.scalar
+                self.ep_pos.publish(pose_ep)
 
                 #time_end = rospy.Time.now()
                 #print("positions_pub: ", (time_end - time_start).to_sec())

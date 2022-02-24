@@ -8,13 +8,13 @@
 
 <!-- 	<node pkg="ros_x_habitat" type="joy_controller.py" name="joy_controller" />-->
 
-<!--	<node pkg="image_view" type="image_view" name="image_view_rgb">
+	<node pkg="image_view" type="image_view" name="image_view_rgb">
 		<remap from="image" to="/camera/color/image_raw"/>
 	</node>
 
 	<node pkg="image_view" type="image_view" name="image_view_depth">
 		<remap from="image" to="/camera/aligned_depth_to_color/image_raw"/>
-	</node> -->
+	</node>
 	
 	<node pkg="image_view" type="image_view" name="image_view_third">
 		<remap from="image" to="/third_rgb"/>
