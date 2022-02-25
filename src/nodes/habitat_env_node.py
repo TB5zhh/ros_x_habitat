@@ -276,15 +276,15 @@ class HabitatEnvNode:
         self.odom_broadcaster = tf.TransformBroadcaster()
         self.gripper_state = rospy.Publisher("gripper_state", Point, queue_size=self.pub_queue_size)
 
-        self.cube_pos_1 = rospy.Publisher("/position/cube_1", Pose, queue_size=self.pub_queue_size)
-        self.cube_pos_2 = rospy.Publisher("/position/cube_2", Pose, queue_size=self.pub_queue_size)
-        self.cube_pos_3 = rospy.Publisher("/position/cube_3", Pose, queue_size=self.pub_queue_size)
-        self.cube_pos_4 = rospy.Publisher("/position/cube_4", Pose, queue_size=self.pub_queue_size)
-        self.cube_pos_5 = rospy.Publisher("/position/cube_5", Pose, queue_size=self.pub_queue_size)
-        self.target_pos_1 = rospy.Publisher("/position/target_1", Pose, queue_size=self.pub_queue_size)
-        self.target_pos_2 = rospy.Publisher("/position/target_2", Pose, queue_size=self.pub_queue_size)
-        self.target_pos_3 = rospy.Publisher("/position/target_3", Pose, queue_size=self.pub_queue_size)
-        self.ep_pos = rospy.Publisher("/position/ep_world", Pose, queue_size=self.pub_queue_size)
+        self.cube_pos_1 = rospy.Publisher("/pose/cube_1", Pose, queue_size=self.pub_queue_size)
+        self.cube_pos_2 = rospy.Publisher("/pose/cube_2", Pose, queue_size=self.pub_queue_size)
+        self.cube_pos_3 = rospy.Publisher("/pose/cube_3", Pose, queue_size=self.pub_queue_size)
+        self.cube_pos_4 = rospy.Publisher("/pose/cube_4", Pose, queue_size=self.pub_queue_size)
+        self.cube_pos_5 = rospy.Publisher("/pose/cube_5", Pose, queue_size=self.pub_queue_size)
+        self.target_pos_1 = rospy.Publisher("/position/target_1", Point, queue_size=self.pub_queue_size)
+        self.target_pos_2 = rospy.Publisher("/position/target_2", Point, queue_size=self.pub_queue_size)
+        self.target_pos_3 = rospy.Publisher("/position/target_3", Point, queue_size=self.pub_queue_size)
+        self.ep_pos = rospy.Publisher("/pose/ep_world", Pose, queue_size=self.pub_queue_size)
 
         # subscribe from command topics
         if self.use_continuous_agent:
@@ -1156,34 +1156,22 @@ class HabitatEnvNode:
                 pos_box = self.recive_box.translation
                 rot_box = self.recive_box.rotation
 
-                pose_target_1 = Pose()
-                pose_target_1.position.x = pos_box.x - 0.125
-                pose_target_1.position.y = pos_box.y + 0.085
-                pose_target_1.position.z = pos_box.z
-                pose_target_1.orientation.x = rot_box.vector.x
-                pose_target_1.orientation.y = rot_box.vector.y
-                pose_target_1.orientation.z = rot_box.vector.z
-                pose_target_1.orientation.w = rot_box.scalar
+                pose_target_1 = Point()
+                pose_target_1.x = pos_box.x - 0.125
+                pose_target_1.y = pos_box.y + 0.085
+                pose_target_1.z = pos_box.z
                 self.target_pos_1.publish(pose_target_1)
 
-                pose_target_2 = Pose()
-                pose_target_2.position.x = pos_box.x
-                pose_target_2.position.y = pos_box.y + 0.085
-                pose_target_2.position.z = pos_box.z
-                pose_target_2.orientation.x = rot_box.vector.x
-                pose_target_2.orientation.y = rot_box.vector.y
-                pose_target_2.orientation.z = rot_box.vector.z
-                pose_target_2.orientation.w = rot_box.scalar
+                pose_target_2 = Point()
+                pose_target_2.x = pos_box.x
+                pose_target_2.y = pos_box.y + 0.085
+                pose_target_2.z = pos_box.z
                 self.target_pos_2.publish(pose_target_2)
 
-                pose_target_3 = Pose()
-                pose_target_3.position.x = pos_box.x + 0.125
-                pose_target_3.position.y = pos_box.y + 0.085
-                pose_target_3.position.z = pos_box.z
-                pose_target_3.orientation.x = rot_box.vector.x
-                pose_target_3.orientation.y = rot_box.vector.y
-                pose_target_3.orientation.z = rot_box.vector.z
-                pose_target_3.orientation.w = rot_box.scalar
+                pose_target_3 = Point()
+                pose_target_3.x = pos_box.x + 0.125
+                pose_target_3.y = pos_box.y + 0.085
+                pose_target_3.z = pos_box.z
                 self.target_pos_3.publish(pose_target_3)
 
                 pose_ep = Pose()
@@ -1328,7 +1316,7 @@ class HabitatEnvNode:
 
     def callback2(self, cmd_msg):
         with self.command_cv:
-            self.arm_action_cfg = [cmd_msg.position.x, cmd_msg.position.y]
+            self.arm_action_cfg = [cmd_msg.position.x*1000, cmd_msg.position.y*1000]
 
     def callback3(self, cmd_msg):
         with self.command_cv:
