@@ -102,6 +102,7 @@ class HabitatEnvNode:
         self.ee_pos = [90, 0]
         self.switch = 0
         self.target = None
+        self.init_move_pos = [0, 0, 0]
         self.move_pos = [0, 0, 0]
         self.curr_pos = [0, 0, 0]
         self.prev_odom = [0, 0, 0]
@@ -687,8 +688,14 @@ class HabitatEnvNode:
                 av = [0, 0, 0]
                 limits=2.0
                 if self.linear_vel is not None and self.angular_vel is not None:
-                    lv=np.clip(self.linear_vel, -1.0, 1.0)
-                    av=np.clip(self.angular_vel, -2.0, 2.0)
+                    lv=np.clip(self.linear_vel, -0.5, 0.5)
+                    av=np.clip(self.angular_vel, -0.5, 0.5)
+                    if lv[0] > -0.1 and lv[0] < 0.1:
+                        lv[0] = 0
+                    if lv[2] > -0.1 and lv[2] < 0.1:
+                        lv[2] = 0
+                    if av[1] > -0.01 and av[1] < 0.01:
+                        av = mn.Vector3(0, 0, 0)
                     vel_control.linear_velocity = mn.Vector3(-lv[2], 0, lv[0])
                     vel_control.angular_velocity = av
 
@@ -816,6 +823,16 @@ class HabitatEnvNode:
                         grip_state.x = 0
                     self.gripper_state.publish(grip_state)
                 self.counter += 1
+
+                if self.init_move_pos[0] < 0.1 and self.init_move_pos[0] > -0.1:
+                    self.init_move_pos[0] = 0
+                if self.init_move_pos[1] < 0.1 and self.init_move_pos[1] > -0.1:
+                    self.init_move_pos[1] = 0
+                if self.init_move_pos[2] < 0.1 and self.init_move_pos[2] > -0.1:
+                    self.init_move_pos[2] = 0
+                if self.init_move_pos != [0, 0, 0]:
+                    self.move_pos = self.init_move_pos
+                    self.init_move_pos = [0, 0, 0]
 
                 move_step = [0, 0, 0]
                 trans_mat = np.mat([[math.cos(th_world), 0, math.sin(th_world)], [0, 1, 0], [-math.sin(th_world), 0, math.cos(th_world)]])
@@ -1320,7 +1337,7 @@ class HabitatEnvNode:
 
     def callback3(self, cmd_msg):
         with self.command_cv:
-            self.move_pos = [cmd_msg.linear.x, -cmd_msg.linear.y, cmd_msg.angular.z]
+            self.init_move_pos = [cmd_msg.linear.x, -cmd_msg.linear.y, cmd_msg.angular.z]
 
     def simulate(self):
         r"""

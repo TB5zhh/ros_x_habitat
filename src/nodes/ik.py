@@ -4,6 +4,16 @@ def ik(x, y):
     if x == 0 and y == 0:
         x = 90 
         y = 40
+
+    if x < 90:
+        return 0, 0, False
+
+    if x < 180 and y < 80:
+        return 0, 0, False
+
+    if y < -20:
+        return 0, 0, False
+
     h1=120
     h2=122.5
     l3=math.sqrt(x*x+y*y)
