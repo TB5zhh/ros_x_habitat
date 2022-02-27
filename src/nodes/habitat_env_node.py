@@ -138,11 +138,11 @@ class HabitatEnvNode:
 
         ao_mgr = self.sim.get_articulated_object_manager()
         self.energy_buff = ao_mgr.add_articulated_object_from_urdf(
-            "./data/energy_buff/urdf/energy_buff.urdf", fixed_base=True
+            "./data/energy_buff/urdf/energy_buff.urdf", fixed_base=False
         )
-        self.energy_buff.translate(mn.Vector3(2.45, 0.05, 1.6))
-        self.energy_buff.rotate_x(mn.Rad(-math.pi/2))
-        self.energy_buff.rotate_y(mn.Rad(-math.pi))
+        self.energy_buff.translate(mn.Vector3(2.45, 0.05, 1.69))
+        #self.energy_buff.rotate_x(mn.Rad(-math.pi/2))
+        #self.energy_buff.rotate_y(mn.Rad(-math.pi))
 
         self.recive_box = ao_mgr.add_articulated_object_from_urdf(
             "./data/buff1/urdf/buff1.urdf", fixed_base=True
@@ -792,7 +792,6 @@ class HabitatEnvNode:
                     scene_obj_pos = self.sim.get_scene_pos()
                     ee_pos = self.sim.robot.ee_transform.translation
                     ee_pos[1] += 0.09
-                    print(ee_pos)
                     if len(scene_obj_pos) != 0:
                         # Get the target the EE is closest to.
                         closest_obj_idx = np.argmin(
@@ -1146,8 +1145,8 @@ class HabitatEnvNode:
                 pose_cube_3.orientation.w = rot_3.scalar
                 self.cube_pos_3.publish(pose_cube_3)
 
-                pos_4 = self.sim.get_translation(1)
-                rot_4 = self.sim.get_rotation(1)
+                pos_4 = self.sim.get_translation(7)
+                rot_4 = self.sim.get_rotation(7)
                 pose_cube_4 = Pose()
                 pose_cube_4.position.x = pos_4.x
                 pose_cube_4.position.y = pos_4.y
@@ -1158,8 +1157,8 @@ class HabitatEnvNode:
                 pose_cube_4.orientation.w = rot_4.scalar
                 self.cube_pos_4.publish(pose_cube_4)
 
-                pos_5 = self.sim.get_translation(1)
-                rot_5 = self.sim.get_rotation(1)
+                pos_5 = self.sim.get_translation(9)
+                rot_5 = self.sim.get_rotation(9)
                 pose_cube_5 = Pose()
                 pose_cube_5.position.x = pos_5.x
                 pose_cube_5.position.y = pos_5.y
@@ -1200,6 +1199,22 @@ class HabitatEnvNode:
                 pose_ep.orientation.z = self.sim.robot.sim_obj.rotation.vector.z
                 pose_ep.orientation.w = self.sim.robot.sim_obj.rotation.scalar
                 self.ep_pos.publish(pose_ep)
+
+                trans_buff = self.energy_buff.transformation
+                rot_buff = self.energy_buff.rotation
+
+                pos_number_1 = np.mat([[-0.23], [0.53], [0.1], [1]])
+                pos_number_2 = np.mat([[0], [0.53], [0.1], [1]])
+                pos_number_3 = np.mat([[0.23], [0.53], [0.1], [1]])
+                new_pos_1 = trans_buff * pos_number_1
+                new_pos_2 = trans_buff * pos_number_2
+                new_pos_3 = trans_buff * pos_number_3
+                self.sim.set_translation(mn.Vector3(new_pos_1[0, 0], new_pos_1[1, 0], new_pos_1[2, 0]), 13)
+                self.sim.set_rotation(rot_buff, 13)
+                self.sim.set_translation(mn.Vector3(new_pos_2[0, 0], new_pos_2[1, 0], new_pos_2[2, 0]), 14)
+                self.sim.set_rotation(rot_buff, 14)
+                self.sim.set_translation(mn.Vector3(new_pos_3[0, 0], new_pos_3[1, 0], new_pos_3[2, 0]), 15)
+                self.sim.set_rotation(rot_buff, 15)
 
                 #time_end = rospy.Time.now()
                 #print("positions_pub: ", (time_end - time_start).to_sec())
