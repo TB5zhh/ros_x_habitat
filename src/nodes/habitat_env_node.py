@@ -145,11 +145,15 @@ class HabitatEnvNode:
         #self.energy_buff.rotate_y(mn.Rad(-math.pi))
 
         self.recive_box = ao_mgr.add_articulated_object_from_urdf(
-            "./data/buff1/urdf/buff1.urdf", fixed_base=True
+            "./data/buff1/urdf/buff1.urdf", fixed_base=False
         )
-        self.recive_box.translate(mn.Vector3(2.45, 0, 1.82))
+        self.recive_box.translate(mn.Vector3(2.45, 0.5, 1.82))
         self.recive_box.rotate_x(mn.Rad(-math.pi/2))
-        self.recive_box.rotate_y(mn.Rad(-math.pi))
+        #self.recive_box.rotate_y(mn.Rad(-math.pi))
+
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0.707, 0, 0), 0.707), 10)
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0.707, 0, 0), 0.707), 11)
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0.707, 0, 0), 0.707), 12)
 
         # shutdown is set to true by eval_episode() to indicate the
         # evaluator wants the node to shutdown
@@ -1189,6 +1193,22 @@ class HabitatEnvNode:
                 pose_target_3.y = pos_box.y + 0.085
                 pose_target_3.z = pos_box.z
                 self.target_pos_3.publish(pose_target_3)
+
+                trans_box = self.recive_box.transformation
+
+                pos_B = np.mat([[-0.13], [-0.07], [0.1], [1]])
+                pos_O = np.mat([[0], [-0.07], [0.1], [1]])
+                pos_X = np.mat([[0.13], [-0.07], [0.1], [1]])
+                new_pos_B = trans_box * pos_B
+                new_pos_O = trans_box * pos_O
+                new_pos_X = trans_box * pos_X
+
+                self.sim.set_translation(mn.Vector3(new_pos_B[0, 0], new_pos_B[1, 0], new_pos_B[2, 0]), 10)
+                self.sim.set_translation(mn.Vector3(new_pos_O[0, 0], new_pos_O[1, 0], new_pos_O[2, 0]), 11)
+                self.sim.set_translation(mn.Vector3(new_pos_X[0, 0], new_pos_X[1, 0], new_pos_X[2, 0]), 12)
+                self.sim.set_rotation(rot_box, 10)
+                self.sim.set_rotation(rot_box, 11)
+                self.sim.set_rotation(rot_box, 12)
 
                 pose_ep = Pose()
                 pose_ep.position.x = self.sim.robot.sim_obj.translation.x
