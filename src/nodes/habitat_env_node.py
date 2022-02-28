@@ -810,6 +810,7 @@ class HabitatEnvNode:
                             grip_state = Point()
                             grip_state.x = 1
                             self.gripper_state.publish(grip_state)
+                    self.switch = -1
                 elif self.switch == 0 and self.sim.grasp_mgr.is_grasped:
                     self.sim.grasp_mgr.desnap()
 
