@@ -147,8 +147,15 @@ class HabitatEnvNode:
         self.recive_box = ao_mgr.add_articulated_object_from_urdf(
             "./data/buff1/urdf/buff1.urdf", fixed_base=False
         )
-        self.recive_box.translate(mn.Vector3(2.45, 0.5, 1.82))
+        self.recive_box.translate(mn.Vector3(2.45, 0.0, 1.82))
         self.recive_box.rotate_x(mn.Rad(-math.pi/2))
+        #self.recive_box.rotate_y(mn.Rad(-math.pi))
+
+        self.base_1 = ao_mgr.add_articulated_object_from_urdf(
+            "./data/base.urdf", fixed_base=True
+        )
+        self.base_1.translate(mn.Vector3(2.45, -0.008, 1.82))
+        self.base_1.rotate_x(mn.Rad(-math.pi/2))
         #self.recive_box.rotate_y(mn.Rad(-math.pi))
 
         self.sim.set_rotation(mn.Quaternion(mn.Vector3(0.707, 0, 0), 0.707), 10)
