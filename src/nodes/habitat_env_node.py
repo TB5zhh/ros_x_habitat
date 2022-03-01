@@ -792,10 +792,17 @@ class HabitatEnvNode:
 
                 #time_start = rospy.Time.now()
 
+                robot_transformation = self.sim.robot.sim_obj.transformation
+                ee_link_pos = [self.ee_pos[0]/1000, self.ee_pos[1]/1000 + 0.15-0.03, 0]
+                ee_offset = [0.11, -0.04, 0]
+                ee_pos = [ee_link_pos[0] + ee_offset[0], ee_link_pos[1] + ee_offset[1], ee_link_pos[2] + ee_offset[2]]
+
+                ee_pos_mat = np.mat([[ee_pos[0]], [ee_pos[1]], [ee_pos[2]], [1]])
+                ee_pos_mat_trans = robot_transformation * ee_pos_mat
+
                 if self.switch == 1 and not self.sim.grasp_mgr.is_grasped:
                     scene_obj_pos = self.sim.get_scene_pos()
-                    ee_pos = self.sim.robot.ee_transform.translation
-                    ee_pos[1] += 0.09
+                    ee_pos = mn.Vector3(ee_pos_mat_trans[0, 0], ee_pos_mat_trans[1, 0], ee_pos_mat_trans[2, 0])
                     if len(scene_obj_pos) != 0:
                         # Get the target the EE is closest to.
                         closest_obj_idx = np.argmin(
@@ -805,7 +812,7 @@ class HabitatEnvNode:
                         closest_obj_pos = scene_obj_pos[closest_obj_idx]
                         to_target = np.linalg.norm(ee_pos - closest_obj_pos, ord=2)
                         sim_idx = self.sim.scene_obj_ids[closest_obj_idx]
-                        if to_target < 0.15:
+                        if to_target < 0.05:
                             self.sim.grasp_mgr.snap_to_obj(sim_idx)
                             grip_state = Point()
                             grip_state.x = 1
