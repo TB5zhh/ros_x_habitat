@@ -9,6 +9,7 @@ import numpy as np
 import magnum as mn
 import tf
 import rospy
+import random
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist, Point, Pose, Quaternion, Vector3
 from nav_msgs.msg import Odometry
@@ -83,11 +84,8 @@ class HabitatEnvNode:
         self.config.freeze()
         add_top_down_map_for_roam_to_config(self.config)
 
-        random_target = []
-        while len(random_target) < 3:
-            r = np.random.random_integers(1, 5, 1)
-            if r[0] not in random_target:
-                random_target.append(r[0])
+        random_target = random.sample(range(1, 6), 3)
+        self.listExchanges = random_target
 
         counter = 1
         for i in random_target:
@@ -297,6 +295,14 @@ class HabitatEnvNode:
         self.target_pos_2 = rospy.Publisher("/position/target_2", Point, queue_size=self.pub_queue_size)
         self.target_pos_3 = rospy.Publisher("/position/target_3", Point, queue_size=self.pub_queue_size)
         self.ep_pos = rospy.Publisher("/pose/ep_world", Pose, queue_size=self.pub_queue_size)
+
+        print("\033[0;37;42mTarget Exchange Markers: \033[0m", self.listExchanges)
+        from std_msgs.msg import String
+        self.exchange_markers = rospy.Publisher("/judgement/exchange_markers", String, queue_size=self.pub_queue_size)
+        # [TODO] Flag, start_time in step(1)
+        self.markers_time_list = [0, 0, 0]
+        self.start_time = 0
+        self.markers_time = rospy.Publisher("/judgement/markers_time", String, queue_size=self.pub_queue_size)
 
         # subscribe from command topics
         if self.use_continuous_agent:
@@ -1250,6 +1256,43 @@ class HabitatEnvNode:
                 self.sim.set_rotation(rot_buff, 14)
                 self.sim.set_translation(mn.Vector3(new_pos_3[0, 0], new_pos_3[1, 0], new_pos_3[2, 0]), 15)
                 self.sim.set_rotation(rot_buff, 15)
+
+                if self.start_time == 0:
+                    self.start_time = time.time()
+
+                # the target_z and target_box x/y related need to set
+                # target_center_z = 1.8200000524520874    # 3.400020122528076
+                target_box_x_bound = 0.06
+                target_box_y_bound = 0.002
+                target_box_y = 0.10000018030405045
+                target_box_z_bound = 0.06
+                # the target_z and target_box x/y related need to set
+                str = ', '.join('%s' %marker for marker in self.listExchanges)
+                self.exchange_markers.publish(str)
+
+                def within_bound(Pos, Target, bound):
+                    return (Pos > Target - bound) and (Pos < Target + bound)
+
+                # list: three random exchange [markers]
+                pose_cube = [Pose(), pose_cube_1, pose_cube_2, pose_cube_3, pose_cube_4, pose_cube_5]
+                pose_target = [pose_target_1, pose_target_2, pose_target_3]
+                # cube_LUT = [0, 1, 3, 5, 7, 9]
+                for idx, iTarget in enumerate(self.listExchanges):
+                    # # [TODO] for test only
+                    # # iTarget = cube_LUT[iTarget]
+                    # if time.time() - self.start_time > idx + 1.:
+                    #     pose_target[idx] = pose_cube[iTarget]   # for test
+                    # #       pose_target[idx].position.z = target_center_z
+
+                    # pose_target[idx].z
+                    if within_bound(pose_cube[iTarget].position.y, target_box_y, target_box_y_bound) and not self.markers_time_list[idx]:
+                        # print(idx, iTarget)
+                        if within_bound(pose_cube[iTarget].position.x, pose_target[idx].x, target_box_x_bound):
+                            if within_bound(pose_cube[iTarget].position.z, pose_target[idx].z, target_box_z_bound):
+                                print(time.time() - self.start_time, "\n", pose_cube[iTarget], "\n", pose_target[idx])
+                                self.markers_time_list[idx] = time.time() - self.start_time
+                str = ', '.join('%s' %marker for marker in self.markers_time_list)
+                self.markers_time.publish(str)
 
                 #time_end = rospy.Time.now()
                 #print("positions_pub: ", (time_end - time_start).to_sec())
