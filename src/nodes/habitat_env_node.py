@@ -813,6 +813,8 @@ class HabitatEnvNode:
                 ee_pos_mat = np.mat([[ee_pos[0]], [ee_pos[1]], [ee_pos[2]], [1]])
                 ee_pos_mat_trans = robot_transformation * ee_pos_mat
 
+                unmove_obj = [10, 11, 12, 13, 14, 15]
+
                 if self.switch == 1 and not self.sim.grasp_mgr.is_grasped:
                     scene_obj_pos = self.sim.get_scene_pos()
                     ee_pos = mn.Vector3(ee_pos_mat_trans[0, 0], ee_pos_mat_trans[1, 0], ee_pos_mat_trans[2, 0])
@@ -825,7 +827,7 @@ class HabitatEnvNode:
                         closest_obj_pos = scene_obj_pos[closest_obj_idx]
                         to_target = np.linalg.norm(ee_pos - closest_obj_pos, ord=2)
                         sim_idx = self.sim.scene_obj_ids[closest_obj_idx]
-                        if to_target < 0.05:
+                        if to_target < 0.05 and sim_idx not in unmove_obj:
                             self.sim.grasp_mgr.snap_to_obj(sim_idx)
                             grip_state = Point()
                             grip_state.x = 1
