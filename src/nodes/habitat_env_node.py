@@ -819,7 +819,7 @@ class HabitatEnvNode:
                         closest_obj_pos = scene_obj_pos[closest_obj_idx]
                         to_target = np.linalg.norm(ee_pos - closest_obj_pos, ord=2)
                         sim_idx = self.sim.scene_obj_ids[closest_obj_idx]
-                        if to_target < 0.05 and sim_idx not in unmove_obj:
+                        if to_target < 0.04 and sim_idx not in unmove_obj:
                             self.sim.grasp_mgr.snap_to_obj(sim_idx)
                             grip_state = Point()
                             grip_state.x = 1
