@@ -299,8 +299,14 @@ class HabitatEnvNode:
         print("\033[0;37;42mTarget Exchange Markers: \033[0m", self.listExchanges)
         from std_msgs.msg import String
         self.exchange_markers = rospy.Publisher("/judgement/exchange_markers", String, queue_size=self.pub_queue_size)
+
+        self.pre_pose_cube = []
+        self.pre_buff_w_energy = []
+        self.is_buff_still = True
+
         # [TODO] Flag, start_time in step(1)
-        self.markers_time_list = [0, 0, 0]
+        NaN = float('nan')
+        self.markers_time_list = [NaN, NaN, NaN]
         self.start_time = 0
         self.markers_time = rospy.Publisher("/judgement/markers_time", String, queue_size=self.pub_queue_size)
 
@@ -1083,8 +1089,9 @@ class HabitatEnvNode:
 
                 # abs()
                 if (vx != 0 or vy != 0 or vth != 0) and self.count_steps > 1:
-                    print("vx, vy, vth, self.count_steps: ", vx, vy, vth, self.count_steps)
                     if self.start_time == 0:
+                        print("vx, vy, vth, self.count_steps: ", vx, vy, vth, self.count_steps)
+                        self.markers_time_list = [0, 0, 0]
                         self.start_time = time.time()
 
                 # self.i_step += 1
@@ -1269,6 +1276,28 @@ class HabitatEnvNode:
                 self.sim.set_translation(mn.Vector3(new_pos_3[0, 0], new_pos_3[1, 0], new_pos_3[2, 0]), 15)
                 self.sim.set_rotation(rot_buff, 15)
 
+                # trans_buff
+                pos_buff = self.energy_buff.translation
+                if self.pre_buff_w_energy == []:
+                    self.pre_buff_w_energy = [pos_box, rot_box, pos_buff, rot_buff]
+
+                # print("box, energy buff | pos, rot: ", pos_box, rot_box, trans_buff, rot_buff)
+
+                def getNorm(mnVector3):
+                    return np.linalg.norm(np.array([mnVector3.x, mnVector3.y, mnVector3.z]), 2)
+
+                if getNorm(pos_box - self.pre_buff_w_energy[0]) \
+                    + getNorm(pos_buff - self.pre_buff_w_energy[2]) > 1e-3 and self.count_steps > 40:
+                    if self.is_buff_still == True:
+                        print("box/buff diff: ", pos_box - self.pre_buff_w_energy[0], pos_buff - self.pre_buff_w_energy[2])
+                    self.is_buff_still = False
+                    for idx, marker in enumerate(self.markers_time_list):
+                        if self.markers_time_list[idx] == 0.0:
+                            self.markers_time_list[idx] = None
+                            print(idx, None)
+
+                self.pre_buff_w_energy = [pos_box, rot_box, pos_buff, rot_buff]
+
                 # if self.start_time == 0:
                 #     self.start_time = time.time()
 
@@ -1288,7 +1317,26 @@ class HabitatEnvNode:
                 # list: three random exchange [markers]
                 pose_cube = [Pose(), pose_cube_1, pose_cube_2, pose_cube_3, pose_cube_4, pose_cube_5]
                 pose_target = [pose_target_1, pose_target_2, pose_target_3]
+
+                if self.pre_pose_cube == []:
+                    self.pre_pose_cube = pose_cube
+
+                def cube_pos_diff(pose, prev_pose):
+                    diff_x = np.abs(pose.position.x - prev_pose.position.x)
+                    diff_y = np.abs(pose.position.y - prev_pose.position.y)
+                    diff_z = np.abs(pose.position.z - prev_pose.position.z)
+                    diff_rot_x = np.abs(pose.orientation.x - prev_pose.orientation.x)
+                    diff_rot_y = np.abs(pose.orientation.y - prev_pose.orientation.y)
+                    diff_rot_z = np.abs(pose.orientation.z - prev_pose.orientation.z)
+                    diff_rot_w = np.abs(pose.orientation.w - prev_pose.orientation.w)
+                    if diff_x < 1e-3 and diff_y < 1e-3 and diff_z < 1e-3 and diff_rot_x < 1e-2 and diff_rot_y < 1e-2 and diff_rot_z < 1e-2 and diff_rot_w < 1e-2:
+                        return True
+                    else:
+                        return False
+
                 # cube_LUT = [0, 1, 3, 5, 7, 9]
+                # 1. Wait for client 2. the Timer started 3. Markers 4. Foul
+                # ⁣NaN, 0.0, time, None
                 for idx, iTarget in enumerate(self.listExchanges):
                     # # [TODO] for test only
                     # # iTarget = cube_LUT[iTarget]
@@ -1297,14 +1345,24 @@ class HabitatEnvNode:
                     # #       pose_target[idx].position.z = target_center_z
 
                     # pose_target[idx].z
-                    if within_bound(pose_cube[iTarget].position.y, target_box_y, target_box_y_bound) and not self.markers_time_list[idx]:
-                        # print(idx, iTarget)
-                        if within_bound(pose_cube[iTarget].position.x, pose_target[idx].x, target_box_x_bound):
-                            if within_bound(pose_cube[iTarget].position.z, pose_target[idx].z, target_box_z_bound):
-                                print(time.time() - self.start_time, "\n", pose_cube[iTarget], "\n", pose_target[idx])
-                                self.markers_time_list[idx] = time.time() - self.start_time
+                    for iCube in range(1, 6):
+                        if within_bound(pose_cube[iCube].position.y, target_box_y, target_box_y_bound) \
+                                    and not self.markers_time_list[idx] and self.is_buff_still == True:
+                            # print(idx, iTarget)
+                            if within_bound(pose_cube[iCube].position.x, pose_target[idx].x, target_box_x_bound):
+                                if within_bound(pose_cube[iCube].position.z, pose_target[idx].z, target_box_z_bound) \
+                                        and cube_pos_diff(pose_cube[iCube], self.pre_pose_cube[iCube]):
+                                    # print(iCube, idx, iTarget)
+                                    if iCube == iTarget and self.markers_time_list[idx] == 0.0:
+                                        print(time.time() - self.start_time, "\n", pose_cube[iCube], "\n", pose_target[idx])
+                                        self.markers_time_list[idx] = time.time() - self.start_time
+                                    elif self.markers_time_list[idx] == 0.0:
+                                        self.markers_time_list[idx] = None
+
                 str = ', '.join('%s' %marker for marker in self.markers_time_list)
                 self.markers_time.publish(str)
+
+                self.pre_pose_cube = pose_cube
 
                 #time_end = rospy.Time.now()
                 #print("positions_pub: ", (time_end - time_start).to_sec())
