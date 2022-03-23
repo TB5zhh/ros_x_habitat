@@ -13,6 +13,7 @@ import random
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist, Point, Pose, Quaternion, Vector3
 from nav_msgs.msg import Odometry
+from tf2_msgs.msg import TFMessage
 import habitat_sim
 from habitat.config.default import get_config
 from habitat.core.simulator import Observations
@@ -160,6 +161,8 @@ class HabitatEnvNode:
         self.sim.set_rotation(mn.Quaternion(mn.Vector3(0.707, 0, 0), 0.707), 11)
         self.sim.set_rotation(mn.Quaternion(mn.Vector3(0.707, 0, 0), 0.707), 12)
 
+        self.tf_init_trans = [0.412, 0, 1.662]
+
         # shutdown is set to true by eval_episode() to indicate the
         # evaluator wants the node to shutdown
         self.shutdown_lock = Lock()
@@ -295,6 +298,8 @@ class HabitatEnvNode:
         self.target_pos_2 = rospy.Publisher("/position/target_2", Point, queue_size=self.pub_queue_size)
         self.target_pos_3 = rospy.Publisher("/position/target_3", Point, queue_size=self.pub_queue_size)
         self.ep_pos = rospy.Publisher("/pose/ep_world", Pose, queue_size=self.pub_queue_size)
+
+        self.tf_sub = rospy.Subscriber("/tf", TFMessage, self.tf_callback, queue_size=self.sub_queue_size)
 
         print("\033[0;37;42mTarget Exchange Markers: \033[0m", self.listExchanges)
         from std_msgs.msg import String
@@ -1490,6 +1495,34 @@ class HabitatEnvNode:
             self.goal_position=np.matrix([[gps_data.goal.target_pose.pose.position.x], [gps_data.goal.target_pose.pose.position.y], [gps_data.goal.target_pose.pose.position.z], [1.0]] )
             self.goal_rotation=gps_data.goal.target_pose.pose.orientation
 
+    def tf_callback(self, cmd_msg):
+        if cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_A655F116':
+            translation = cmd_msg.transforms[0].transform.translation
+            rotation = cmd_msg.transforms[0].transform.rotation
+
+            r, p, y = self.quat2ang(rotation.x, rotation.y, rotation.z, rotation.w)
+            p += 1.57
+            if r < 0:
+                p = -p
+            p += 1.57
+            w, x, y, z = self.ang2quat(0, p, 0)
+
+            self.sim.robot.sim_obj.rotation = mn.Quaternion(mn.Vector3(x, y, z), w)
+
+            trans_mat = np.mat([[0, 0, -1], [0, 1, 0], [1, 0, 0]])
+            trans = np.mat([[translation.x], [translation.y], [translation.z]])
+            new_trans = trans_mat * trans
+
+            new_trans = new_trans.T + self.tf_init_trans
+
+            trans_mat = np.mat([[math.cos(p), 0, math.sin(p)], [0, 1, 0], [-math.sin(p), 0, -math.cos(p)]])
+            x_trans = np.mat([[0.125], [0], [0]])
+            x_trans = trans_mat * x_trans
+
+            new_trans += x_trans.T
+
+            self.sim.robot.sim_obj.translation = mn.Vector3(new_trans[0, 0], 0.45, new_trans[0, 2])
+
     def callback1(self, cmd_msg):
         with self.command_cv:
             self.switch = cmd_msg.x
@@ -1501,6 +1534,28 @@ class HabitatEnvNode:
     def callback3(self, cmd_msg):
         with self.command_cv:
             self.init_move_pos = [cmd_msg.linear.x, -cmd_msg.linear.y, cmd_msg.angular.z]
+
+    def quat2ang(self, x, y ,z, w):
+        r = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
+        p = math.asin(2 * (w * y - z * x))
+        y = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+        return r, p, y
+    
+    def ang2quat(self, r, p, y):
+        sinp = math.sin(p/2)
+        siny = math.sin(y/2)
+        sinr = math.sin(r/2)
+
+        cosp = math.cos(p/2)
+        cosy = math.cos(y/2)
+        cosr = math.cos(r/2)
+
+        w = cosr*cosp*cosy + sinr*sinp*siny
+        x = sinr*cosp*cosy - cosr*sinp*siny
+        y = cosr*sinp*cosy + sinr*cosp*siny
+        z = cosr*cosp*siny - sinr*sinp*cosy
+
+        return w, x, y, z
 
     def simulate(self):
         r"""
