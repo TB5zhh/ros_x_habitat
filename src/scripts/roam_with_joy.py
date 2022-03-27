@@ -24,6 +24,11 @@ def main():
         type=int,
         default=60,
     )
+    parser.add_argument(
+        "--round",
+        type=int,
+        default=0,
+    )
     args = parser.parse_args()
 
     # start the roamer nodes
@@ -33,6 +38,7 @@ def main():
         hab_env_config_path=args.hab_env_config_path,
         hab_env_node_name=args.hab_env_node_name,
         video_frame_period=args.video_frame_period,
+        round=args.round,
     )
 
     # get to the specified episode

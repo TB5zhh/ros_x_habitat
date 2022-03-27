@@ -20,6 +20,7 @@ class JoyHabitatRoamer:
         hab_env_config_path: str,
         hab_env_node_name: str,
         video_frame_period: int,
+        round: int,
     ):
         r"""
         :param launch_file_path: path to the launch file which launches the
@@ -44,7 +45,7 @@ class JoyHabitatRoamer:
         # start the env node
         self.hab_env_node_name = hab_env_node_name
         env_node_args = shlex.split(
-            f"python {hab_env_node_path} --node-name {self.hab_env_node_name} --task-config {hab_env_config_path} --enable-physics-sim --use-continuous-agent"
+            f"python {hab_env_node_path} --node-name {self.hab_env_node_name} --task-config {hab_env_config_path} --enable-physics-sim --use-continuous-agent --round {round}"
         )
         self.env_process = Popen(env_node_args)
 

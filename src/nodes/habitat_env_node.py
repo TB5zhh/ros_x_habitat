@@ -55,6 +55,7 @@ class HabitatEnvNode:
         enable_physics_sim: bool = True,
         use_continuous_agent: bool = True,
         pub_rate: float = 5.0,
+        round: int = 0,
     ):
         r"""
         Instantiates a node incapsulating a Habitat sim environment.
@@ -85,7 +86,15 @@ class HabitatEnvNode:
         self.config.freeze()
         add_top_down_map_for_roam_to_config(self.config)
 
-        random_target = random.sample(range(1, 6), 3)
+        if round == 1:
+            random_target = [4, 5, 1]
+        elif round == 2:
+            random_target = [3, 5, 2]
+        elif round == 3:
+            random_target = [1, 3, 5]
+        else:
+            random_target = random.sample(range(1, 6), 3)
+        
         self.listExchanges = random_target
 
         counter = 1
@@ -1521,7 +1530,7 @@ class HabitatEnvNode:
 
             new_trans += x_trans.T
 
-            self.sim.robot.sim_obj.translation = mn.Vector3(new_trans[0, 0], 0.45, new_trans[0, 2])
+            self.sim.robot.sim_obj.translation = mn.Vector3(new_trans[0, 0], self.sim.robot.sim_obj.translation[1], new_trans[0, 2])
 
     def callback1(self, cmd_msg):
         with self.command_cv:
@@ -1623,6 +1632,11 @@ def main():
         type=float,
         default=30.0,
     )
+    parser.add_argument(
+        "--round",
+        type=int,
+        default=0,
+    )
     args = parser.parse_args()
 
     # initialize the env node
@@ -1632,6 +1646,7 @@ def main():
         enable_physics_sim=args.enable_physics_sim,
         use_continuous_agent=args.use_continuous_agent,
         pub_rate=args.sensor_pub_rate,
+        round=args.round,
     )
 
     # run simulations
