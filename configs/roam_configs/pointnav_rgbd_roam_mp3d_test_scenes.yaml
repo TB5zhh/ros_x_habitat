@@ -52,7 +52,7 @@ PHYSICS_SIMULATOR:
     PHYSICS_CONFIG_FILE: ./data/default.physics_config.json
   LAG_OBSERVATIONS: 1
   ROBOT_URDF: ./data/robots/ep_description/urdf/ep_description.urdf
-  SCENE: ./data/replica_cad/stages/123.glb
+  SCENE: ./data/replica_cad/stages/scene1.glb
   SEED: 100
   SEMANTIC_SENSOR:
     HEIGHT: 480
@@ -66,7 +66,7 @@ PHYSICS_SIMULATOR:
   TYPE: RearrangeSim-v0
   ep_info: [{
     'episode_id': '1536',
-    'scene_id': 'data/replica_cad/stages/123',
+    'scene_id': 'data/replica_cad/stages/scene1',
     'start_position': [0, 0],
     'start_rotation': 180,
     'info': None,

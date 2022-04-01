@@ -148,21 +148,21 @@ class HabitatEnvNode:
         self.energy_buff = ao_mgr.add_articulated_object_from_urdf(
             "./data/energy_buff/urdf/energy_buff.urdf", fixed_base=False
         )
-        self.energy_buff.translate(mn.Vector3(2.45, 0.05, 1.69))
+        self.energy_buff.translate(mn.Vector3(2.45, 0.05, 1.66))
         #self.energy_buff.rotate_x(mn.Rad(-math.pi/2))
         #self.energy_buff.rotate_y(mn.Rad(-math.pi))
 
         self.recive_box = ao_mgr.add_articulated_object_from_urdf(
             "./data/buff1/urdf/buff1.urdf", fixed_base=False
         )
-        self.recive_box.translate(mn.Vector3(2.45, 0.0, 1.82))
+        self.recive_box.translate(mn.Vector3(2.45, 0.0, 1.75))
         self.recive_box.rotate_x(mn.Rad(-math.pi/2))
         #self.recive_box.rotate_y(mn.Rad(-math.pi))
 
         self.base_1 = ao_mgr.add_articulated_object_from_urdf(
             "./data/base.urdf", fixed_base=True
         )
-        self.base_1.translate(mn.Vector3(2.45, -0.008, 1.82))
+        self.base_1.translate(mn.Vector3(2.45, -0.011, 1.75))
         self.base_1.rotate_x(mn.Rad(-math.pi/2))
         #self.recive_box.rotate_y(mn.Rad(-math.pi))
 
@@ -171,6 +171,38 @@ class HabitatEnvNode:
         self.sim.set_rotation(mn.Quaternion(mn.Vector3(0.707, 0, 0), 0.707), 12)
 
         self.tf_init_trans = [0.412, 0, 1.662]
+
+        self.dtrans = [-0.23, 0, 0.08]
+
+        self.sim.robot.sim_obj.translate(mn.Vector3(self.dtrans))
+        self.energy_buff.translate(mn.Vector3(self.dtrans))
+        self.recive_box.translate(mn.Vector3(self.dtrans))
+        self.base_1.translate(mn.Vector3(self.dtrans))
+
+
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0, 0, 0), 0), 0)
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0, 0, 0), 0), 1)
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0, 0, 0), 0), 2)
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0, 0, 0), 0), 3)
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0, 0, 0), 0), 4)
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0, 0, 0), 0), 5)
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0, 0, 0), 0), 6)
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0, 0, 0), 0), 7)
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0, 0, 0), 0), 8)
+        self.sim.set_rotation(mn.Quaternion(mn.Vector3(0, 0, 0), 0), 9)
+
+        self.sim.set_translation(self.sim.get_translation(0) + mn.Vector3(self.dtrans), 0)
+        self.sim.set_translation(self.sim.get_translation(0) + mn.Vector3(0, 0.05, 0), 1)
+        self.sim.set_translation(self.sim.get_translation(2) + mn.Vector3(self.dtrans), 2)
+        self.sim.set_translation(self.sim.get_translation(2) + mn.Vector3(0, 0.1, 0), 3)
+        self.sim.set_translation(self.sim.get_translation(4) + mn.Vector3(self.dtrans), 4)
+        self.sim.set_translation(self.sim.get_translation(4) + mn.Vector3(0, 0.05, 0), 5)
+        self.sim.set_translation(self.sim.get_translation(6) + mn.Vector3(self.dtrans), 6)
+        self.sim.set_translation(self.sim.get_translation(6) + mn.Vector3(0, 0.05, 0), 7)
+        self.sim.set_translation(self.sim.get_translation(8) + mn.Vector3(self.dtrans), 8)
+        self.sim.set_translation(self.sim.get_translation(8) + mn.Vector3(0, 0.05, 0), 9)
+
+        self.tf_init_trans = [self.tf_init_trans[0] + self.dtrans[0], self.tf_init_trans[1] + self.dtrans[1], self.tf_init_trans[2] + self.dtrans[2]]
 
         # shutdown is set to true by eval_episode() to indicate the
         # evaluator wants the node to shutdown
