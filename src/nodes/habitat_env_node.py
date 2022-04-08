@@ -1537,7 +1537,7 @@ class HabitatEnvNode:
             self.goal_rotation=gps_data.goal.target_pose.pose.orientation
 
     def tf_callback(self, cmd_msg):
-        if cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_A655F116':
+        if cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_A655F116' or cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_28F9E075' or  cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_79DF4EBF' or cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_38294716':
             translation = cmd_msg.transforms[0].transform.translation
             rotation = cmd_msg.transforms[0].transform.rotation
 
