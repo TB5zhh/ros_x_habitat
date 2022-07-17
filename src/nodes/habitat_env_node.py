@@ -75,7 +75,6 @@ class HabitatEnvNode:
         # initialize node
         self.node_name = node_name
         rospy.init_node(self.node_name)
-
         rospy.on_shutdown(self.on_exit_generate_video)
 
         # set up environment config
