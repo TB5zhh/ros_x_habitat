@@ -93,12 +93,13 @@ class HabitatEnvNode:
             random_target = [1, 3, 5]
         else:
             random_target = random.sample(range(1, 6), 3)
-        
+
         self.listExchanges = random_target
 
         counter = 1
         for i in random_target:
-            shutil.copyfile("./data/objects/ycb/configs_convex/letters/"+str(i)+".glb", "./data/objects/ycb/configs_convex/random/"+str(counter)+".glb")
+            shutil.copyfile("./data/objects/ycb/configs_convex/letters/" + str(i) + ".glb",
+                            "./data/objects/ycb/configs_convex/random/" + str(counter) + ".glb")
             counter += 1
 
         # instantiate environment
@@ -123,46 +124,40 @@ class HabitatEnvNode:
         self.sim = make_sim(id_sim=self.config.SIMULATOR.TYPE, config=self.config.SIMULATOR)
         self.sim.reconfigure(config=self.config.SIMULATOR)
         self.robot_init_pos = [4.20, 0, 3.50]
-        self.robot_init_ang = math.pi/2.0
+        self.robot_init_ang = math.pi / 2.0
         self.sim.robot.sim_obj.translate(mn.Vector3(self.robot_init_pos[0], 0.045, self.robot_init_pos[2]))
         self.sim.robot.sim_obj.rotate_y(mn.Rad(self.robot_init_ang))
-        self.last_angular_velocity=0.0
-        self.goal_position=np.matrix([[self.robot_init_pos[0]], [0.0], [self.robot_init_pos[2]], [1.0]])
-        self.goal_rotation=mn.Quaternion(mn.Vector3(0.0, 0.0, 0.0), 0.0)
+        self.last_angular_velocity = 0.0
+        self.goal_position = np.matrix([[self.robot_init_pos[0]], [0.0], [self.robot_init_pos[2]], [1.0]])
+        self.goal_rotation = mn.Quaternion(mn.Vector3(0.0, 0.0, 0.0), 0.0)
         self.last_position_x = self.robot_init_pos[0]
         self.last_position_y = self.robot_init_pos[2]
         self.last_th = self.sim.robot.base_rot
-        self.last_linear_velocity_x=0.0
-        self.last_linear_velocity_y=0.0
-        x=self.sim.robot.sim_obj.rotation.vector.x
-        y=self.sim.robot.sim_obj.rotation.vector.y
-        z=self.sim.robot.sim_obj.rotation.vector.z
-        w=self.sim.robot.sim_obj.rotation.scalar
-        self.pitch_divide2=math.asin((w * y - z * x))/math.pi * 180
-        self.map_orientation=float(self.sim.robot.base_rot)
-        if self.pitch_divide2<0 and float(self.map_orientation)<np.pi*2/3 :
-            self.map_orientation=-self.map_orientation+2*np.pi
+        self.last_linear_velocity_x = 0.0
+        self.last_linear_velocity_y = 0.0
+        x = self.sim.robot.sim_obj.rotation.vector.x
+        y = self.sim.robot.sim_obj.rotation.vector.y
+        z = self.sim.robot.sim_obj.rotation.vector.z
+        w = self.sim.robot.sim_obj.rotation.scalar
+        self.pitch_divide2 = math.asin((w * y - z * x)) / math.pi * 180
+        self.map_orientation = float(self.sim.robot.base_rot)
+        if self.pitch_divide2 < 0 and float(self.map_orientation) < np.pi * 2 / 3:
+            self.map_orientation = -self.map_orientation + 2 * np.pi
 
         ao_mgr = self.sim.get_articulated_object_manager()
-        self.energy_buff = ao_mgr.add_articulated_object_from_urdf(
-            "./data/energy_buff/urdf/energy_buff.urdf", fixed_base=False
-        )
+        self.energy_buff = ao_mgr.add_articulated_object_from_urdf("./data/energy_buff/urdf/energy_buff.urdf", fixed_base=False)
         self.energy_buff.translate(mn.Vector3(2.45, 0.05, 1.66))
         #self.energy_buff.rotate_x(mn.Rad(-math.pi/2))
         #self.energy_buff.rotate_y(mn.Rad(-math.pi))
 
-        self.recive_box = ao_mgr.add_articulated_object_from_urdf(
-            "./data/buff1/urdf/buff1.urdf", fixed_base=False
-        )
+        self.recive_box = ao_mgr.add_articulated_object_from_urdf("./data/buff1/urdf/buff1.urdf", fixed_base=False)
         self.recive_box.translate(mn.Vector3(2.45, 0.0, 1.75))
-        self.recive_box.rotate_x(mn.Rad(-math.pi/2))
+        self.recive_box.rotate_x(mn.Rad(-math.pi / 2))
         #self.recive_box.rotate_y(mn.Rad(-math.pi))
 
-        self.base_1 = ao_mgr.add_articulated_object_from_urdf(
-            "./data/base.urdf", fixed_base=True
-        )
+        self.base_1 = ao_mgr.add_articulated_object_from_urdf("./data/base.urdf", fixed_base=True)
         self.base_1.translate(mn.Vector3(2.45, -0.011, 1.75))
-        self.base_1.rotate_x(mn.Rad(-math.pi/2))
+        self.base_1.rotate_x(mn.Rad(-math.pi / 2))
         #self.recive_box.rotate_y(mn.Rad(-math.pi))
 
         self.sim.set_rotation(mn.Quaternion(mn.Vector3(0.707, 0, 0), 0.707), 10)
@@ -177,7 +172,6 @@ class HabitatEnvNode:
         self.energy_buff.translate(mn.Vector3(self.dtrans))
         self.recive_box.translate(mn.Vector3(self.dtrans))
         self.base_1.translate(mn.Vector3(self.dtrans))
-
 
         self.sim.set_rotation(mn.Quaternion(mn.Vector3(0, 0, 0), 0), 0)
         self.sim.set_rotation(mn.Quaternion(mn.Vector3(0, 0, 0), 0), 1)
@@ -269,9 +263,7 @@ class HabitatEnvNode:
         )
 
         # establish roam service server
-        self.roam_service = rospy.Service(
-            f"{PACKAGE_NAME}/{node_name}/{ServiceNames.ROAM}", Roam, self.roam
-        )
+        self.roam_service = rospy.Service(f"{PACKAGE_NAME}/{node_name}/{ServiceNames.ROAM}", Roam, self.roam)
 
         # define the max rate at which we publish sensor readings
         self.pub_rate = float(pub_rate)
@@ -287,38 +279,23 @@ class HabitatEnvNode:
         if "HEAD_RGB_SENSOR" in self.config.SIMULATOR.AGENT_0.SENSORS:
             self.pub_rgb = rospy.Publisher("/camera/color/image_raw", Image, queue_size=self.pub_queue_size)
             self.pub_third_rgb = rospy.Publisher("third_rgb", Image, queue_size=self.pub_queue_size)
-            self.pub_camera_info_rgb = rospy.Publisher(
-                    "/camera/color/camera_info", CameraInfo, queue_size=self.pub_queue_size
-                )
+            self.pub_camera_info_rgb = rospy.Publisher("/camera/color/camera_info", CameraInfo, queue_size=self.pub_queue_size)
         if "HEAD_DEPTH_SENSOR" in self.config.SIMULATOR.AGENT_0.SENSORS:
             if self.use_continuous_agent:
                 # if we are using a ROS-based agent, we publish depth images
                 # in type Image
-                self.pub_depth = rospy.Publisher(
-                    "/camera/aligned_depth_to_color/image_raw", Image, queue_size=self.pub_queue_size
-                )
+                self.pub_depth = rospy.Publisher("/camera/aligned_depth_to_color/image_raw", Image, queue_size=self.pub_queue_size)
                 # also publish depth camera info
-                self.pub_camera_info_depth = rospy.Publisher(
-                    "/camera/aligned_depth_to_color/camera_info", CameraInfo, queue_size=self.pub_queue_size
-                )
+                self.pub_camera_info_depth = rospy.Publisher("/camera/aligned_depth_to_color/camera_info", CameraInfo, queue_size=self.pub_queue_size)
             else:
                 # otherwise, we publish in type DepthImage to preserve as much
                 # accuracy as possible
-                self.pub_depth = rospy.Publisher(
-                    "depth", DepthImage, queue_size=self.pub_queue_size
-                )
+                self.pub_depth = rospy.Publisher("depth", DepthImage, queue_size=self.pub_queue_size)
         if "POINTGOAL_WITH_GPS_COMPASS_SENSOR" in self.config.TASK.SENSORS:
             self.pub_pointgoal_with_gps_compass = rospy.Publisher(
-                "pointgoal_with_gps_compass",
-                PointGoalWithGPSCompass,
-                queue_size=self.pub_queue_size
-            )
-        self.gps_pub = rospy.Publisher(
-                "gps",
-                PointGoalWithGPSCompass,
-                queue_size=self.pub_queue_size
-            )
-	# before: imu after: /imu/data_raw
+                "pointgoal_with_gps_compass", PointGoalWithGPSCompass, queue_size=self.pub_queue_size)
+        self.gps_pub = rospy.Publisher("gps", PointGoalWithGPSCompass, queue_size=self.pub_queue_size)
+        # before: imu after: /imu/data_raw
         self.imu_pub = rospy.Publisher("/imu/data_raw", Imu, queue_size=self.pub_queue_size)
         self.imu_broadcaster = tf.TransformBroadcaster()
         # before: ray after: /rplidar/scan
@@ -359,35 +336,23 @@ class HabitatEnvNode:
 
         # subscribe from command topics
         if self.use_continuous_agent:
-            self.sub = rospy.Subscriber(
-                "cmd_vel", Twist, self.callback, queue_size=self.sub_queue_size
-            )
+            self.sub = rospy.Subscriber("cmd_vel", Twist, self.callback, queue_size=self.sub_queue_size)
 
-            self.sub1 = rospy.Subscriber(
-                "arm_gripper", Point, self.callback1, queue_size=self.sub_queue_size
-            )
+            self.sub1 = rospy.Subscriber("arm_gripper", Point, self.callback1, queue_size=self.sub_queue_size)
 
-            self.sub2 = rospy.Subscriber(
-                "arm_position", Pose, self.callback2, queue_size=self.sub_queue_size
-            )
+            self.sub2 = rospy.Subscriber("arm_position", Pose, self.callback2, queue_size=self.sub_queue_size)
 
-            self.sub3 = rospy.Subscriber(
-                "cmd_position", Twist, self.callback3,  queue_size=self.sub_queue_size
-            )
+            self.sub3 = rospy.Subscriber("cmd_position", Twist, self.callback3, queue_size=self.sub_queue_size)
         else:
-            self.sub = rospy.Subscriber(
-                "action", Int16, self.callback, queue_size=self.sub_queue_size
-            )
+            self.sub = rospy.Subscriber("action", Int16, self.callback, queue_size=self.sub_queue_size)
 
         # wait until connections with the agent is established
         self.logger.info("env making sure agent is subscribed to sensor topics...")
-        while (
-            self.pub_rgb.get_num_connections() == 0
-            or self.pub_depth.get_num_connections() == 0
-            or self.pub_pointgoal_with_gps_compass.get_num_connections() == 0
-        ):
+        while (self.pub_rgb.get_num_connections() == 0 or self.pub_depth.get_num_connections() == 0
+               # or self.pub_pointgoal_with_gps_compass.get_num_connections() == 0
+              ):
             pass
-        self.goal_sub=rospy.Subscriber("gps/goal", MoveBaseActionGoal ,self.callback_gps,queue_size=self.sub_queue_size)
+        self.goal_sub = rospy.Subscriber("gps/goal", MoveBaseActionGoal, self.callback_gps, queue_size=self.sub_queue_size)
         self.logger.info("env initialized")
 
     def reset(self):
@@ -515,7 +480,6 @@ class HabitatEnvNode:
                 while self.enable_eval is True:
                     self.enable_eval_cv.wait()
 
-
                     # no episode is evaluated. Toggle the flag so the env node
                     # can be reused
                 self.all_episodes_evaluated = False
@@ -552,9 +516,7 @@ class HabitatEnvNode:
             # readings in meters
             assert self.config.SIMULATOR.HEAD_DEPTH_SENSOR.NORMALIZE_DEPTH is False
             depth_img_in_m = np.squeeze(depth_img, axis=2)
-            depth_msg = CvBridge().cv2_to_imgmsg(
-                depth_img_in_m.astype(np.float32), encoding="passthrough"
-            )
+            depth_msg = CvBridge().cv2_to_imgmsg(depth_img_in_m.astype(np.float32), encoding="passthrough")
         else:
             depth_msg = DepthImage()
             depth_msg.height, depth_msg.width, _ = depth_img.shape
@@ -580,13 +542,9 @@ class HabitatEnvNode:
             sensor_data = observations_hab[sensor_uuid]
             # we publish to each of RGB, Depth and GPS+Compass sensor
             if sensor_uuid == "robot_head_rgb":
-                sensor_msg = CvBridge().cv2_to_imgmsg(
-                    sensor_data.astype(np.uint8), encoding="rgb8"
-                )
+                sensor_msg = CvBridge().cv2_to_imgmsg(sensor_data.astype(np.uint8), encoding="rgb8")
             elif sensor_uuid == "robot_arm_rgb":
-                sensor_msg = CvBridge().cv2_to_imgmsg(
-                    sensor_data.astype(np.uint8), encoding="rgb8"
-                )
+                sensor_msg = CvBridge().cv2_to_imgmsg(sensor_data.astype(np.uint8), encoding="rgb8")
             elif sensor_uuid == "robot_head_depth":
                 sensor_msg = self.cv2_to_depthmsg(sensor_data)
             elif sensor_uuid == "pointgoal_with_gps_compass":
@@ -625,19 +583,15 @@ class HabitatEnvNode:
                             observations_ros["robot_head_depth"].header,
                             observations_ros["robot_head_depth"].height,
                             observations_ros["robot_head_depth"].width,
-                        )
-                    )
+                        ))
                     self.pub_camera_info_depth.publish(
                         self.make_depth_camera_info_msg(
                             observations_ros["robot_head_depth"].header,
                             observations_ros["robot_head_depth"].height,
                             observations_ros["robot_head_depth"].width,
-                        )
-                    )
+                        ))
             elif sensor_uuid == "pointgoal_with_gps_compass":
-                self.pub_pointgoal_with_gps_compass.publish(
-                    observations_ros["pointgoal_with_gps_compass"]
-                )
+                self.pub_pointgoal_with_gps_compass.publish(observations_ros["pointgoal_with_gps_compass"])
 
     def make_depth_camera_info_msg(self, header, height, width):
         r"""
@@ -650,7 +604,7 @@ class HabitatEnvNode:
         # code modifed upon work by Bruce Cui
         camera_info_msg = CameraInfo()
         camera_info_msg.header = header
-        fx, fy = width / 2 / math.tan(1.2037/2), width / 2 / math.tan(1.2037/2)
+        fx, fy = width / 2 / math.tan(1.2037 / 2), width / 2 / math.tan(1.2037 / 2)
         cx, cy = width / 2, height / 2
 
         camera_info_msg.width = width
@@ -660,26 +614,19 @@ class HabitatEnvNode:
         camera_info_msg.D = np.float32([0, 0, 0, 0, 0])
         camera_info_msg.P = [fx, 0, cx, 0, 0, fy, cy, 0, 0, 0, 1, 0]
         return camera_info_msg
+
     def rotation_x(self, roll):
-        rotation=np.matrix(
-        [[1.0,0.0,0.0,0.0],
-        [0.0,math.cos(roll),math.sin(roll),0.0],
-        [0.0,-math.sin(roll),math.cos(roll),0.0],
-        [0.0,0.0,0.0,1.0]])
+        rotation = np.matrix([[1.0, 0.0, 0.0, 0.0], [0.0, math.cos(roll), math.sin(roll), 0.0], [0.0, -math.sin(roll),
+                                                                                                 math.cos(roll), 0.0], [0.0, 0.0, 0.0, 1.0]])
         return rotation
+
     def rotation_z(self, yaw):
-        rotation=np.matrix(
-        [[math.cos(yaw),math.sin(yaw),0.0,0.0],
-        [-math.sin(yaw),math.cos(yaw),0.0,0.0],
-        [0.0,0.0,1.0,0.0],
-        [0.0,0.0,0.0,1.0]])
+        rotation = np.matrix([[math.cos(yaw), math.sin(yaw), 0.0, 0.0], [-math.sin(yaw), math.cos(yaw), 0.0, 0.0], [0.0, 0.0, 1.0, 0.0],
+                              [0.0, 0.0, 0.0, 1.0]])
         return rotation
-    def shift_mat(self, x,y,z):
-        shift=np.matrix(
-        [[1.0,0.0,0.0,x],
-        [0.0,1.0,0.0,y],
-        [0.0,0.0,1.0,z],
-        [0.0,0.0,0.0,1.0]])
+
+    def shift_mat(self, x, y, z):
+        shift = np.matrix([[1.0, 0.0, 0.0, x], [0.0, 1.0, 0.0, y], [0.0, 0.0, 1.0, z], [0.0, 0.0, 0.0, 1.0]])
         return shift
 
     def step(self):
@@ -724,10 +671,10 @@ class HabitatEnvNode:
 
                 #time_start = rospy.Time.now()
 
-                x=self.sim.robot.sim_obj.rotation.vector.x
-                y=self.sim.robot.sim_obj.rotation.vector.y
-                z=self.sim.robot.sim_obj.rotation.vector.z
-                w=self.sim.robot.sim_obj.rotation.scalar
+                x = self.sim.robot.sim_obj.rotation.vector.x
+                y = self.sim.robot.sim_obj.rotation.vector.y
+                z = self.sim.robot.sim_obj.rotation.vector.z
+                w = self.sim.robot.sim_obj.rotation.scalar
 
                 r = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
                 r = r / math.pi * 180
@@ -736,18 +683,18 @@ class HabitatEnvNode:
                 y = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
                 y = y / math.pi * 180
 
-#                self.sim.robot.sim_obj.root_linear_velocity
-                time_change=rospy.Time.now().to_sec()-self.last_time.to_sec()
+                #                self.sim.robot.sim_obj.root_linear_velocity
+                time_change = rospy.Time.now().to_sec() - self.last_time.to_sec()
 
                 #angular in world 0-pi*4/3, pi*2/3-0
                 th_world = float(self.sim.robot.base_rot)
-                if self.pitch_divide2<0 and float(th_world)<np.pi*2/3 :
-                    th_world=-th_world+2*np.pi#0-2pi
+                if self.pitch_divide2 < 0 and float(th_world) < np.pi * 2 / 3:
+                    th_world = -th_world + 2 * np.pi  #0-2pi
 
                 #angular in map(star from init orientation) -pi/2-pi*3/2
-                th_map = float(th_world)-self.map_orientation
-                if th_map<0 :
-                    th_map=th_map+np.pi*2#0-2pi
+                th_map = float(th_world) - self.map_orientation
+                if th_map < 0:
+                    th_map = th_map + np.pi * 2  #0-2pi
 
                 vel_control = habitat_sim.physics.VelocityControl()
                 vel_control.controlling_lin_vel = True
@@ -756,10 +703,10 @@ class HabitatEnvNode:
                 vel_control.ang_vel_is_local = True
                 lv = [0, 0, 0]
                 av = [0, 0, 0]
-                limits=2.0
+                limits = 2.0
                 if self.linear_vel is not None and self.angular_vel is not None:
-                    lv=np.clip(self.linear_vel, -0.5, 0.5)
-                    av=np.clip(self.angular_vel, -0.5, 0.5)
+                    lv = np.clip(self.linear_vel, -0.5, 0.5)
+                    av = np.clip(self.angular_vel, -0.5, 0.5)
                     if lv[0] > -0.1 and lv[0] < 0.1:
                         lv[0] = 0
                     if lv[2] > -0.1 and lv[2] < 0.1:
@@ -772,20 +719,12 @@ class HabitatEnvNode:
                 ctrl_freq = self.pub_rate
 
                 trans = self.sim.robot.sim_obj.transformation
-                rigid_state = habitat_sim.RigidState(
-                    mn.Quaternion.from_matrix(trans.rotation()), trans.translation
-                )
+                rigid_state = habitat_sim.RigidState(mn.Quaternion.from_matrix(trans.rotation()), trans.translation)
 
-                target_rigid_state = vel_control.integrate_transform(
-                    1 / ctrl_freq, rigid_state
-                )
-                end_pos = self.sim.step_filter(
-                    rigid_state.translation, target_rigid_state.translation
-                )
+                target_rigid_state = vel_control.integrate_transform(1 / ctrl_freq, rigid_state)
+                end_pos = self.sim.step_filter(rigid_state.translation, target_rigid_state.translation)
 
-                target_trans = mn.Matrix4.from_(
-                    target_rigid_state.rotation.to_matrix(), end_pos
-                )
+                target_trans = mn.Matrix4.from_(target_rigid_state.rotation.to_matrix(), end_pos)
                 self.sim.robot.sim_obj.transformation = target_trans
 
                 #time_end = rospy.Time.now()
@@ -799,17 +738,17 @@ class HabitatEnvNode:
                     joint_1_action = np.zeros(12)
                     joint_2_action = np.zeros(12)
 
-                    joint_1_action[0] =  1.0
+                    joint_1_action[0] = 1.0
                     joint_1_action[1] = -1.0
                     joint_1_action[2] = -1.0
                     joint_1_action[3] = -1.0
                     joint_1_action[4] = -1.0
 
                     joint_2_action[5] = -1.0
-                    joint_2_action[6] =  1.0
-                    joint_2_action[3] =  1.0
+                    joint_2_action[6] = 1.0
+                    joint_2_action[3] = 1.0
                     joint_2_action[7] = -1.0
-                    joint_2_action[4] =  1.0
+                    joint_2_action[4] = 1.0
 
                     joint_1_action *= self.arm_action_cfg[0]
                     joint_2_action *= self.arm_action_cfg[1]
@@ -817,9 +756,7 @@ class HabitatEnvNode:
                     arm_action = joint_1_action + joint_2_action
                     arm_action *= 0.0125
 
-                    self.sim.robot.arm_motor_pos = (
-                        arm_action + self.sim.robot.arm_motor_pos
-                    )
+                    self.sim.robot.arm_motor_pos = (arm_action + self.sim.robot.arm_motor_pos)
                 else:
                     if self.target is None and self.arm_action_cfg is not None:
                         self.ee_pos[0] = self.arm_action_cfg[0]
@@ -849,9 +786,7 @@ class HabitatEnvNode:
                         arm_action[6] = joint_2_action + joint_1_action
                         arm_action[7] = -(joint_2_action + joint_1_action)
 
-                        self.sim.robot.arm_motor_pos = (
-                            arm_action + self.sim.robot.arm_motor_pos
-                        )
+                        self.sim.robot.arm_motor_pos = (arm_action + self.sim.robot.arm_motor_pos)
 
                 #time_end = rospy.Time.now()
                 #print("arm_pos: ", (time_end - time_start).to_sec())
@@ -859,7 +794,7 @@ class HabitatEnvNode:
                 #time_start = rospy.Time.now()
 
                 robot_transformation = self.sim.robot.sim_obj.transformation
-                ee_link_pos = [self.ee_pos[0]/1000, self.ee_pos[1]/1000 + 0.15-0.03, 0]
+                ee_link_pos = [self.ee_pos[0] / 1000, self.ee_pos[1] / 1000 + 0.15 - 0.03, 0]
                 ee_offset = [0.11, -0.04, 0]
                 ee_pos = [ee_link_pos[0] + ee_offset[0], ee_link_pos[1] + ee_offset[1], ee_link_pos[2] + ee_offset[2]]
 
@@ -873,9 +808,7 @@ class HabitatEnvNode:
                     ee_pos = mn.Vector3(ee_pos_mat_trans[0, 0], ee_pos_mat_trans[1, 0], ee_pos_mat_trans[2, 0])
                     if len(scene_obj_pos) != 0:
                         # Get the target the EE is closest to.
-                        closest_obj_idx = np.argmin(
-                            np.linalg.norm(scene_obj_pos - ee_pos, ord=2, axis=-1)
-                        )
+                        closest_obj_idx = np.argmin(np.linalg.norm(scene_obj_pos - ee_pos, ord=2, axis=-1))
 
                         closest_obj_pos = scene_obj_pos[closest_obj_idx]
                         to_target = np.linalg.norm(ee_pos - closest_obj_pos, ord=2)
@@ -922,7 +855,7 @@ class HabitatEnvNode:
                     move_step[1] = np.clip(self.move_pos[1] - self.curr_pos[1], -0.005, 0.005)
                     move_step[2] = np.clip(self.move_pos[2] - self.curr_pos[2], -0.01, 0.01)
                     move_step_mat = np.mat([[move_step[0]], [0], [move_step[1]]])
-                    trans_move_step = trans_mat*move_step_mat
+                    trans_move_step = trans_mat * move_step_mat
                     self.sim.robot.sim_obj.translate(mn.Vector3(trans_move_step[0, 0], trans_move_step[1, 0], trans_move_step[2, 0]))
                     self.sim.robot.sim_obj.rotate_y(mn.Rad(move_step[2]))
                     self.curr_pos = [self.curr_pos[0] + move_step[0], self.curr_pos[1] + move_step[1], self.curr_pos[2] + move_step[2]]
@@ -945,37 +878,39 @@ class HabitatEnvNode:
                 #time_start = rospy.Time.now()
 
                 if self.counter % 3 == 0:
-                    num_readings=760
+                    num_readings = 760
                     scan = LaserScan()
                     scan.header.stamp = self.current_time
                     scan.header.frame_id = "laser_link"
                     scan.angle_min = -np.pi
                     scan.angle_max = np.pi
-                    scan.angle_increment = 2*np.pi / num_readings
-                    scan.time_increment = 1*3/self.pub_rate/num_readings
+                    scan.angle_increment = 2 * np.pi / num_readings
+                    scan.time_increment = 1 * 3 / self.pub_rate / num_readings
                     scan.range_min = 0.15
                     scan.range_max = 12.0
                     ray = habitat_sim.geo.Ray()
                     origin = np.mat([[0.12], [0.15], [0]])
 
-                    origin = trans_mat*origin
-                    ray.origin = mn.Vector3(origin[0, 0]+self.sim.robot.sim_obj.transformation[3][0], origin[1, 0], origin[2, 0]+self.sim.robot.sim_obj.transformation[3][2])
+                    origin = trans_mat * origin
+                    ray.origin = mn.Vector3(origin[0, 0] + self.sim.robot.sim_obj.transformation[3][0], origin[1, 0],
+                                            origin[2, 0] + self.sim.robot.sim_obj.transformation[3][2])
 
-                    for i in range(num_readings+1,0,-1):
-                        ray.direction = mn.Vector3(math.cos(i/num_readings*2*np.pi-th_world),0,math.sin(i/num_readings*np.pi*2-th_world))
+                    for i in range(num_readings + 1, 0, -1):
+                        ray.direction = mn.Vector3(
+                            math.cos(i / num_readings * 2 * np.pi - th_world), 0, math.sin(i / num_readings * np.pi * 2 - th_world))
                         #print(ray.direction)
                         raycast_results = self.sim.cast_ray(ray, 100)
-    #!                	scan.intensities.append(10*i)
+                        #!                	scan.intensities.append(10*i)
                         if len(raycast_results.hits) != 0:
-    #                		print(ray.origin)
+                            #                		print(ray.origin)
                             scan.ranges.append(raycast_results.hits[0].ray_distance)
                     #give up 90 angle behind
-                    for i in range(int(num_readings*0.375),int(num_readings*0.625), 1):
-                        j=i
+                    for i in range(int(num_readings * 0.375), int(num_readings * 0.625), 1):
+                        j = i
 
-                        if i>(num_readings-1) :
-                            j=i-num_readings
-                        scan.ranges[j]=float("inf")
+                        if i > (num_readings - 1):
+                            j = i - num_readings
+                        scan.ranges[j] = float("inf")
                     self.ray_pub.publish(scan)
 
                 #time_end = rospy.Time.now()
@@ -983,10 +918,9 @@ class HabitatEnvNode:
 
                 #time_start = rospy.Time.now()
 
-                imu_data=Imu()
-                imu_data.header.stamp= self.current_time
+                imu_data = Imu()
+                imu_data.header.stamp = self.current_time
                 imu_data.header.frame_id = "imu_link"
-
 
                 imu_data.orientation_covariance[0] = 0
                 imu_data.orientation_covariance[1] = 0
@@ -998,36 +932,36 @@ class HabitatEnvNode:
                 imu_data.orientation_covariance[7] = 0
                 imu_data.orientation_covariance[8] = 0
 
-                imu_data.angular_velocity_covariance[0]=0
-                imu_data.angular_velocity_covariance[1]=0
-                imu_data.angular_velocity_covariance[2]=0
-                imu_data.angular_velocity_covariance[3]=0
-                imu_data.angular_velocity_covariance[4]=0
-                imu_data.angular_velocity_covariance[5]=0
-                imu_data.angular_velocity_covariance[6]=0
-                imu_data.angular_velocity_covariance[7]=0
-                imu_data.angular_velocity_covariance[8]=0
+                imu_data.angular_velocity_covariance[0] = 0
+                imu_data.angular_velocity_covariance[1] = 0
+                imu_data.angular_velocity_covariance[2] = 0
+                imu_data.angular_velocity_covariance[3] = 0
+                imu_data.angular_velocity_covariance[4] = 0
+                imu_data.angular_velocity_covariance[5] = 0
+                imu_data.angular_velocity_covariance[6] = 0
+                imu_data.angular_velocity_covariance[7] = 0
+                imu_data.angular_velocity_covariance[8] = 0
 
-                imu_data.linear_acceleration_covariance[0]=0
-                imu_data.linear_acceleration_covariance[1]=0
-                imu_data.linear_acceleration_covariance[2]=0
-                imu_data.linear_acceleration_covariance[3]=0
-                imu_data.linear_acceleration_covariance[4]=0
-                imu_data.linear_acceleration_covariance[5]=0
-                imu_data.linear_acceleration_covariance[6]=0
-                imu_data.linear_acceleration_covariance[7]=0
-                imu_data.linear_acceleration_covariance[8]=0
+                imu_data.linear_acceleration_covariance[0] = 0
+                imu_data.linear_acceleration_covariance[1] = 0
+                imu_data.linear_acceleration_covariance[2] = 0
+                imu_data.linear_acceleration_covariance[3] = 0
+                imu_data.linear_acceleration_covariance[4] = 0
+                imu_data.linear_acceleration_covariance[5] = 0
+                imu_data.linear_acceleration_covariance[6] = 0
+                imu_data.linear_acceleration_covariance[7] = 0
+                imu_data.linear_acceleration_covariance[8] = 0
 
-                current_position_x=self.sim.robot.sim_obj.transformation[3][0]
-                current_position_y=self.sim.robot.sim_obj.transformation[3][2]
+                current_position_x = self.sim.robot.sim_obj.transformation[3][0]
+                current_position_y = self.sim.robot.sim_obj.transformation[3][2]
 
-                angular_change=th_world-float(self.last_th)
+                angular_change = th_world - float(self.last_th)
 
                 imu_quat = tf.transformations.quaternion_from_euler(0, 0, th_map)
-                imu_data.orientation=Quaternion(*imu_quat)
+                imu_data.orientation = Quaternion(*imu_quat)
 
-                x_position_change=self.sim.robot.sim_obj.transformation[3][0]-self.last_position_x
-                y_position_change=self.sim.robot.sim_obj.transformation[3][2]-self.last_position_y
+                x_position_change = self.sim.robot.sim_obj.transformation[3][0] - self.last_position_x
+                y_position_change = self.sim.robot.sim_obj.transformation[3][2] - self.last_position_y
 
                 #linear_velocity_x_world=x_position_change*self.pub_rate
                 #linear_velocity_y_world=y_position_change*self.pub_rate
@@ -1035,25 +969,24 @@ class HabitatEnvNode:
                 #linear_velocity_y=(linear_velocity_y_world*math.cos(th_world)-linear_velocity_x_world*math.sin(th_world))
                 transformation_mat = np.mat([[math.cos(th_world), 0, -math.sin(th_world)], [-math.sin(th_world), 0, -math.cos(th_world)], [0, 1, 0]])
 
-                world_linear_vel_mat = np.mat([[x_position_change*self.pub_rate], [0], [y_position_change*self.pub_rate]])
+                world_linear_vel_mat = np.mat([[x_position_change * self.pub_rate], [0], [y_position_change * self.pub_rate]])
                 world_linear_vel_trans = transformation_mat * world_linear_vel_mat
-                linear_velocity_x=world_linear_vel_trans[0, 0]
-                linear_velocity_y=world_linear_vel_trans[1, 0]
-                imu_data.linear_acceleration.x = (linear_velocity_x-self.last_linear_velocity_x)*self.pub_rate
-                imu_data.linear_acceleration.y = (linear_velocity_y-self.last_linear_velocity_y)*self.pub_rate
+                linear_velocity_x = world_linear_vel_trans[0, 0]
+                linear_velocity_y = world_linear_vel_trans[1, 0]
+                imu_data.linear_acceleration.x = (linear_velocity_x - self.last_linear_velocity_x) * self.pub_rate
+                imu_data.linear_acceleration.y = (linear_velocity_y - self.last_linear_velocity_y) * self.pub_rate
                 imu_data.linear_acceleration.z = 9.8  #TODO: check real imu linear acceleration z
 
                 imu_data.angular_velocity.x = 0
                 imu_data.angular_velocity.y = 0
-                if angular_change >  6.0 :
-                    angular_change=angular_change+np.pi*2
-                if angular_change < -6.0 :
-                    angular_change=angular_change-np.pi*2
+                if angular_change > 6.0:
+                    angular_change = angular_change + np.pi * 2
+                if angular_change < -6.0:
+                    angular_change = angular_change - np.pi * 2
 
-
-                imu_data.angular_velocity.z = angular_change*self.pub_rate
-                if float(imu_data.angular_velocity.z)>limits or float(imu_data.angular_velocity.z)<-limits:
-                    imu_data.angular_velocity.z=self.last_angular_velocity
+                imu_data.angular_velocity.z = angular_change * self.pub_rate
+                if float(imu_data.angular_velocity.z) > limits or float(imu_data.angular_velocity.z) < -limits:
+                    imu_data.angular_velocity.z = self.last_angular_velocity
                 self.imu_pub.publish(imu_data)
 
                 #time_end = rospy.Time.now()
@@ -1062,47 +995,48 @@ class HabitatEnvNode:
                 #time_start = rospy.Time.now()
 
                 self.last_th = th_world
-                self.last_angular_velocity=imu_data.angular_velocity.z
+                self.last_angular_velocity = imu_data.angular_velocity.z
                 self.last_position_x = self.sim.robot.sim_obj.transformation[3][0]
                 self.last_position_y = self.sim.robot.sim_obj.transformation[3][2]
-                self.last_linear_velocity_x=linear_velocity_x
-                self.last_linear_velocity_y=linear_velocity_y
+                self.last_linear_velocity_x = linear_velocity_x
+                self.last_linear_velocity_y = linear_velocity_y
 
                 gps_msg = PointGoalWithGPSCompass()
-                gps_msg.header.stamp= self.current_time
+                gps_msg.header.stamp = self.current_time
                 gps_msg.header.frame_id = "gps"
-                angle_env2base=th_world+self.map_orientation
-                rotation_x = self.rotation_x(-np.pi/2)
-                rotation_z = self.rotation_z(th_map+self.map_orientation)
-                shift_goal = self.shift_mat(-self.sim.robot.sim_obj.transformation[3][0],0.0,-self.sim.robot.sim_obj.transformation[3][2])
-                transf = rotation_z*rotation_x*shift_goal
-                goal_on_map= transf*self.goal_position
+                angle_env2base = th_world + self.map_orientation
+                rotation_x = self.rotation_x(-np.pi / 2)
+                rotation_z = self.rotation_z(th_map + self.map_orientation)
+                shift_goal = self.shift_mat(-self.sim.robot.sim_obj.transformation[3][0], 0.0, -self.sim.robot.sim_obj.transformation[3][2])
+                transf = rotation_z * rotation_x * shift_goal
+                goal_on_map = transf * self.goal_position
                 r"""
                 goal_env2base_x=(self.goal_position[2,0]*math.cos(angle_env2base)+self.goal_position[0,0]*math.sin(angle_env2base))-(self.sim.robot.sim_obj.transformation[3][2]*math.cos(angle_env2base)+self.sim.robot.sim_obj.transformation[3][0]*math.sin(angle_env2base))
                 goal_env2base_y=(self.goal_position[0,0]*math.cos(angle_env2base)-self.goal_position[2,0]*math.sin(angle_env2base))-(self.sim.robot.sim_obj.transformation[3][0]*math.cos(angle_env2base)-self.sim.robot.sim_obj.transformation[3][2] * math.sin(angle_env2base))
                 """
-                x_distance=goal_on_map[0,0]
-                y_distance=goal_on_map[1,0]
-                gps_msg.distance_to_goal = (x_distance**2+y_distance**2)**0.5
+                x_distance = goal_on_map[0, 0]
+                y_distance = goal_on_map[1, 0]
+                gps_msg.distance_to_goal = (x_distance**2 + y_distance**2)**0.5
 
-                if x_distance==0 :
-                    if y_distance > 0 :
-                        gps_msg.angle_to_goal=0.0
-                    else :
-                        gps_msg.angle_to_goal=np.pi
-                elif y_distance==0 :
-                    if x_distance>0 :
-                        gps_msg.angle_to_goal=np.pi/2
-                    else :
-                        gps_msg.angle_to_goal=np.pi*1.5
-                elif x_distance>0 and y_distance>0 :
-                    gps_msg.angle_to_goal=float(math.atan(abs(y_distance/x_distance)))
-                elif x_distance<0 and y_distance>0 :
-                    gps_msg.angle_to_goal=float(np.pi-math.atan(abs(y_distance/x_distance)))
-                elif x_distance<0 and y_distance<0 :
-                    gps_msg.angle_to_goal=float(np.pi+math.atan(abs(y_distance/x_distance)))
-                elif x_distance>0 and y_distance<0 :
-                    gps_msg.angle_to_goal=float(np.pi*2-math.atan(abs(y_distance/x_distance)))
+                if x_distance == 0:
+                    if y_distance > 0:
+                        gps_msg.angle_to_goal = 0.0
+                    else:
+                        gps_msg.angle_to_goal = np.pi
+                elif y_distance == 0:
+                    if x_distance > 0:
+                        gps_msg.angle_to_goal = np.pi / 2
+                    else:
+                        gps_msg.angle_to_goal = np.pi * 1.5
+                elif x_distance > 0 and y_distance > 0:
+                    gps_msg.angle_to_goal = float(math.atan(abs(y_distance / x_distance)))
+                elif x_distance < 0 and y_distance > 0:
+                    gps_msg.angle_to_goal = float(np.pi - math.atan(abs(y_distance / x_distance)))
+                elif x_distance < 0 and y_distance < 0:
+                    gps_msg.angle_to_goal = float(np.pi + math.atan(abs(y_distance / x_distance)))
+                elif x_distance > 0 and y_distance < 0:
+                    gps_msg.angle_to_goal = float(np.pi * 2 - math.atan(abs(y_distance / x_distance)))
+
 
 #                print("d:",gps_msg.distance_to_goal)
 #                print("a:",gps_msg.angle_to_goal)
@@ -1119,7 +1053,8 @@ class HabitatEnvNode:
                 movement_z = self.sim.robot.sim_obj.transformation[3][2] - self.robot_init_pos[2]
                 odom_th = th_map
 
-                transformation_mat = np.mat([[math.cos(self.robot_init_ang), 0, -math.sin(self.robot_init_ang)], [-math.sin(self.robot_init_ang), 0, -math.cos(self.robot_init_ang)], [0, 1, 0]])
+                transformation_mat = np.mat([[math.cos(self.robot_init_ang), 0, -math.sin(self.robot_init_ang)],
+                                             [-math.sin(self.robot_init_ang), 0, -math.cos(self.robot_init_ang)], [0, 1, 0]])
 
                 curr_pos_trans = transformation_mat * np.mat([[movement_x], [0], [movement_z]])
 
@@ -1128,9 +1063,9 @@ class HabitatEnvNode:
 
                 odom_quat = tf.transformations.quaternion_from_euler(0, 0, odom_th)
 
-                vx = (odom_x - self.prev_odom[0])/(self.current_time - self.last_time).to_sec()
-                vy = (odom_y - self.prev_odom[1])/(self.current_time - self.last_time).to_sec()
-                vth = (odom_th - self.prev_odom[2])/(self.current_time - self.last_time).to_sec()
+                vx = (odom_x - self.prev_odom[0]) / (self.current_time - self.last_time).to_sec()
+                vy = (odom_y - self.prev_odom[1]) / (self.current_time - self.last_time).to_sec()
+                vth = (odom_th - self.prev_odom[2]) / (self.current_time - self.last_time).to_sec()
 
                 # abs()
                 if (vx != 0 or vy != 0 or vth != 0) and self.count_steps > 1:
@@ -1143,7 +1078,7 @@ class HabitatEnvNode:
 
                 vel_mat = np.mat([[vx], [vy], [0]])
                 vel_trans_mat = np.mat([[math.cos(th_map), math.sin(th_map), 0], [-math.sin(th_map), math.cos(th_map), 0], [0, 0, 1]])
-                vel_trans = vel_trans_mat*vel_mat
+                vel_trans = vel_trans_mat * vel_mat
 
                 vx = vel_trans[0, 0]
                 vy = vel_trans[1, 0]
@@ -1176,22 +1111,19 @@ class HabitatEnvNode:
 
                 #time_start = rospy.Time.now()
 
-                v1 = (vx + vy + vth*0.2)/0.045
-                v2 = (vx - vy - vth*0.2)/0.045
-                v3 = (vx + vy - vth*0.2)/0.045
-                v4 = (vx - vy + vth*0.2)/0.045
+                v1 = (vx + vy + vth * 0.2) / 0.045
+                v2 = (vx - vy - vth * 0.2) / 0.045
+                v3 = (vx + vy - vth * 0.2) / 0.045
+                v4 = (vx - vy + vth * 0.2) / 0.045
 
                 wheel_action = np.zeros(12)
 
                 wheel_action[11] = v1 / self.pub_rate
-                wheel_action[9]  = v2 / self.pub_rate
-                wheel_action[8]  = v3 / self.pub_rate
+                wheel_action[9] = v2 / self.pub_rate
+                wheel_action[8] = v3 / self.pub_rate
                 wheel_action[10] = v4 / self.pub_rate
 
-
-                self.sim.robot.arm_motor_pos = (
-                    wheel_action + self.sim.robot.arm_motor_pos
-                )
+                self.sim.robot.arm_motor_pos = (wheel_action + self.sim.robot.arm_motor_pos)
 
                 #time_end = rospy.Time.now()
                 #print("wheel_ctrl: ", (time_end - time_start).to_sec())
@@ -1353,7 +1285,7 @@ class HabitatEnvNode:
                 target_box_y = 0.10000018030405045
                 target_box_z_bound = 0.06
                 # the target_z and target_box x/y related need to set
-                str = ', '.join('%s' %marker for marker in self.listExchanges)
+                str = ', '.join('%s' % marker for marker in self.listExchanges)
                 self.exchange_markers.publish(str)
 
                 def within_bound(Pos, Target, bound):
@@ -1404,7 +1336,7 @@ class HabitatEnvNode:
                                     elif self.markers_time_list[idx] == 0.0:
                                         self.markers_time_list[idx] = None
 
-                str = ', '.join('%s' %marker for marker in self.markers_time_list)
+                str = ', '.join('%s' % marker for marker in self.markers_time_list)
                 self.markers_time.publish(str)
 
                 self.pre_pose_cube = pose_cube
@@ -1518,9 +1450,7 @@ class HabitatEnvNode:
         with self.command_cv:
             if self.use_continuous_agent:
                 # set linear + angular velocity
-                self.linear_vel = np.array(
-                    [-cmd_msg.linear.y, 0.0, -cmd_msg.linear.x]
-                )
+                self.linear_vel = np.array([-cmd_msg.linear.y, 0.0, -cmd_msg.linear.x])
                 self.angular_vel = np.array([0.0, cmd_msg.angular.z, 0.0])
                 #self.arm_action_cfg = [cmd_msg.angular.x, cmd_msg.angular.y]
                 #self.switch = cmd_msg.linear.z
@@ -1531,12 +1461,16 @@ class HabitatEnvNode:
             # set action publish flag and notify
             self.new_command_published = True
             self.command_cv.notify()
+
     def callback_gps(self, gps_data):
-            self.goal_position=np.matrix([[gps_data.goal.target_pose.pose.position.x], [gps_data.goal.target_pose.pose.position.y], [gps_data.goal.target_pose.pose.position.z], [1.0]] )
-            self.goal_rotation=gps_data.goal.target_pose.pose.orientation
+        self.goal_position = np.matrix([[gps_data.goal.target_pose.pose.position.x], [gps_data.goal.target_pose.pose.position.y],
+                                        [gps_data.goal.target_pose.pose.position.z], [1.0]])
+        self.goal_rotation = gps_data.goal.target_pose.pose.orientation
 
     def tf_callback(self, cmd_msg):
-        if cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_A655F116' or cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_28F9E075' or  cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_79DF4EBF' or cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_38294716':
+        if cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_A655F116' or cmd_msg.transforms[
+                0].child_frame_id == 'tracker_LHR_28F9E075' or cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_79DF4EBF' or cmd_msg.transforms[
+                    0].child_frame_id == 'tracker_LHR_38294716':
             translation = cmd_msg.transforms[0].transform.translation
             rotation = cmd_msg.transforms[0].transform.rotation
 
@@ -1569,31 +1503,31 @@ class HabitatEnvNode:
 
     def callback2(self, cmd_msg):
         with self.command_cv:
-            self.arm_action_cfg = [cmd_msg.position.x*1000, cmd_msg.position.y*1000]
+            self.arm_action_cfg = [cmd_msg.position.x * 1000, cmd_msg.position.y * 1000]
 
     def callback3(self, cmd_msg):
         with self.command_cv:
             self.init_move_pos = [cmd_msg.linear.x, -cmd_msg.linear.y, cmd_msg.angular.z]
 
-    def quat2ang(self, x, y ,z, w):
+    def quat2ang(self, x, y, z, w):
         r = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
         p = math.asin(2 * (w * y - z * x))
         y = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
         return r, p, y
-    
+
     def ang2quat(self, r, p, y):
-        sinp = math.sin(p/2)
-        siny = math.sin(y/2)
-        sinr = math.sin(r/2)
+        sinp = math.sin(p / 2)
+        siny = math.sin(y / 2)
+        sinr = math.sin(r / 2)
 
-        cosp = math.cos(p/2)
-        cosy = math.cos(y/2)
-        cosr = math.cos(r/2)
+        cosp = math.cos(p / 2)
+        cosy = math.cos(y / 2)
+        cosr = math.cos(r / 2)
 
-        w = cosr*cosp*cosy + sinr*sinp*siny
-        x = sinr*cosp*cosy - cosr*sinp*siny
-        y = cosr*sinp*cosy + sinr*cosp*siny
-        z = cosr*cosp*siny - sinr*sinp*cosy
+        w = cosr * cosp * cosy + sinr * sinp * siny
+        x = sinr * cosp * cosy - cosr * sinp * siny
+        y = cosr * sinp * cosy + sinr * cosp * siny
+        z = cosr * cosp * siny - sinr * sinp * cosy
 
         return w, x, y, z
 
@@ -1653,9 +1587,7 @@ def main():
     # parse input arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--node-name", type=str, default="env_node")
-    parser.add_argument(
-        "--task-config", type=str, default="configs/pointnav_d_orignal.yaml"
-    )
+    parser.add_argument("--task-config", type=str, default="configs/pointnav_d_orignal.yaml")
     parser.add_argument("--enable-physics-sim", default=False, action="store_true")
     parser.add_argument("--use-continuous-agent", default=False, action="store_true")
     parser.add_argument(
