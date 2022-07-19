@@ -21,7 +21,7 @@ from habitat.sims import make_sim
 from ros_x_habitat.msg import PointGoalWithGPSCompass, DepthImage
 from ros_x_habitat.srv import EvalEpisode, ResetAgent, GetAgentTime, Roam
 from sensor_msgs.msg import Image, CameraInfo, LaserScan, Imu
-from std_msgs.msg import Header, Int16
+from std_msgs.msg import Header, Int16, String
 from src.constants.constants import (
     EvalEpisodeSpecialIDs,
     NumericalMetrics,
@@ -39,6 +39,47 @@ from src.measures.top_down_map_for_roam import (
     add_top_down_map_for_roam_to_config,
 )
 from src.nodes.ik import ik
+
+rotate_x = lambda roll: np.matrix([
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, math.cos(roll), math.sin(roll), 0.0],
+    [0.0, -math.sin(roll), math.cos(roll), 0.0],
+    [0.0, 0.0, 0.0, 1.0],
+])
+rotate_z = lambda yaw: np.matrix([
+    [math.cos(yaw), math.sin(yaw), 0.0, 0.0],
+    [-math.sin(yaw), math.cos(yaw), 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0],
+])
+shift = lambda x, y, z: np.matrix([
+    [1.0, 0.0, 0.0, x],
+    [0.0, 1.0, 0.0, y],
+    [0.0, 0.0, 1.0, z],
+    [0.0, 0.0, 0.0, 1.0],
+])
+
+def ang2quat(r, p, y):
+    sinp = math.sin(p / 2)
+    siny = math.sin(y / 2)
+    sinr = math.sin(r / 2)
+
+    cosp = math.cos(p / 2)
+    cosy = math.cos(y / 2)
+    cosr = math.cos(r / 2)
+
+    w = cosr * cosp * cosy + sinr * sinp * siny
+    x = sinr * cosp * cosy - cosr * sinp * siny
+    y = cosr * sinp * cosy + sinr * cosp * siny
+    z = cosr * cosp * siny - sinr * sinp * cosy
+
+    return w, x, y, z
+
+def quat2ang(x, y, z, w):
+    r = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
+    p = math.asin(2 * (w * y - z * x))
+    y = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+    return r, p, y
 
 
 class HabitatEnvNode:
@@ -68,23 +109,22 @@ class HabitatEnvNode:
             discrete simulator
         :pub_rate: the rate at which the node publishes sensor readings
         """
-        # precondition check
         if use_continuous_agent:
             assert enable_physics_sim
 
-        # initialize node
+        ########################################
+        # Initialize
+        ########################################
         self.node_name = node_name
         rospy.init_node(self.node_name)
         rospy.on_shutdown(self.on_exit_generate_video)
+        # TODO add logging file
+        self.logger = utils_logging.setup_logger(self.node_name)
 
-        # set up environment config
-        self.config = get_config(config_paths)
-        # embed top-down map in config
-        self.config.defrost()
-        self.config.TASK.MEASUREMENTS.append("TOP_DOWN_MAP")
-        self.config.freeze()
-        add_top_down_map_for_roam_to_config(self.config)
-
+        ########################################
+        # Set up target
+        ########################################
+        # Select target blocks
         if round == 1:
             random_target = [4, 5, 1]
         elif round == 2:
@@ -93,15 +133,21 @@ class HabitatEnvNode:
             random_target = [1, 3, 5]
         else:
             random_target = random.sample(range(1, 6), 3)
-
         self.listExchanges = random_target
-
+        print("\033[0;37;42mTarget Exchange Markers: \033[0m", self.listExchanges)
+        # Prepare block models
         counter = 1
         for i in random_target:
-            shutil.copyfile("./data/objects/ycb/configs_convex/letters/" + str(i) + ".glb",
-                            "./data/objects/ycb/configs_convex/random/" + str(counter) + ".glb")
+            shutil.copyfile(
+                f"./data/objects/ycb/configs_convex/letters/{i}.glb",
+                f"./data/objects/ycb/configs_convex/random/{counter}.glb",
+            )
             counter += 1
 
+        ########################################
+        # Set up simulator
+        ########################################
+        # TODO add comments on the definitions
         # instantiate environment
         self.enable_physics_sim = enable_physics_sim
         self.use_continuous_agent = use_continuous_agent
@@ -117,6 +163,13 @@ class HabitatEnvNode:
         self.current_time = rospy.Time.now()
         self.last_time = rospy.Time.now()
         self.counter = 0
+
+        # set up environment config
+        self.config = get_config(config_paths)
+        self.config.defrost()
+        self.config.TASK.MEASUREMENTS.append("TOP_DOWN_MAP")
+        self.config.freeze()
+        add_top_down_map_for_roam_to_config(self.config)
         # overwrite env config if physics enabled
         if self.enable_physics_sim:
             HabitatSimEvaluator.overwrite_simulator_config(self.config)
@@ -197,6 +250,9 @@ class HabitatEnvNode:
 
         self.tf_init_trans = [self.tf_init_trans[0] + self.dtrans[0], self.tf_init_trans[1] + self.dtrans[1], self.tf_init_trans[2] + self.dtrans[2]]
 
+        ########################################
+        # Set up locks and condition variables
+        ########################################
         # shutdown is set to true by eval_episode() to indicate the
         # evaluator wants the node to shutdown
         self.shutdown_lock = Lock()
@@ -214,18 +270,16 @@ class HabitatEnvNode:
         # no more episodes left to evaluate. eval_episodes() then signals
         # back to evaluator, and set it to False again for re-use
         self.all_episodes_evaluated = False
-        self.enable_eval = False
         self.enable_eval_cv = Condition()
+        with self.enable_eval_cv:
+            self.enable_eval = True
 
         # enable_reset is set to true by eval_episode() or roam() to allow
         # reset() to run
         # enable_reset is set to false by reset() after simulator reset
         self.enable_reset_cv = Condition()
         with self.enable_reset_cv:
-            self.enable_reset = False
-            self.enable_roam = False
-            self.episode_id_last = None
-            self.scene_id_last = None
+            self.enable_reset = True
 
         # agent velocities/action and variables to keep things synchronized
         self.command_cv = Condition()
@@ -238,121 +292,164 @@ class HabitatEnvNode:
             self.count_steps = None
             self.new_command_published = False
 
-        self.observations = None
-
         # timing variables and guarding lock
         self.timing_lock = Lock()
         with self.timing_lock:
             self.t_reset_elapsed = None
             self.t_sim_elapsed = None
 
-        # video production variables
+        self.observations = None
+
+        def on_callback(self, cmd_msg):
+            with self.command_cv:
+                if self.use_continuous_agent:
+                    # set linear + angular velocity
+                    self.linear_vel = np.array([-cmd_msg.linear.y, 0.0, -cmd_msg.linear.x])
+                    self.angular_vel = np.array([0.0, cmd_msg.angular.z, 0.0])
+                    #self.arm_action_cfg = [cmd_msg.angular.x, cmd_msg.angular.y]
+                    #self.switch = cmd_msg.linear.z
+                else:
+                    # get the action
+                    self.action = cmd_msg.data
+
+                # set action publish flag and notify
+                self.new_command_published = True
+                self.command_cv.notify()
+
+        def on_callback1(self, cmd_msg):
+            with self.command_cv:
+                self.switch = cmd_msg.x
+
+        def on_callback2(self, cmd_msg):
+            with self.command_cv:
+                self.arm_action_cfg = [cmd_msg.position.x * 1000, cmd_msg.position.y * 1000]
+
+        def on_callback3(self, cmd_msg):
+            with self.command_cv:
+                self.init_move_pos = [cmd_msg.linear.x, -cmd_msg.linear.y, cmd_msg.angular.z]
+
+        def on_callback_gps(self, gps_data):
+            self.goal_position = np.matrix([[gps_data.goal.target_pose.pose.position.x], [gps_data.goal.target_pose.pose.position.y], [gps_data.goal.target_pose.pose.position.z], [1.0]])
+            self.goal_rotation = gps_data.goal.target_pose.pose.orientation
+
+        def on_tf_callback(self, cmd_msg):
+            if cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_A655F116' or cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_28F9E075' or cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_79DF4EBF' or cmd_msg.transforms[
+                    0].child_frame_id == 'tracker_LHR_38294716':
+                translation = cmd_msg.transforms[0].transform.translation
+                rotation = cmd_msg.transforms[0].transform.rotation
+
+                r, p, y = quat2ang(rotation.x, rotation.y, rotation.z, rotation.w)
+                p += 1.57
+                if r < 0:
+                    p = -p
+                p += 1.57
+                w, x, y, z = ang2quat(0, p, 0)
+
+                self.sim.robot.sim_obj.rotation = mn.Quaternion(mn.Vector3(x, y, z), w)
+
+                trans_mat = np.mat([[0, 0, -1], [0, 1, 0], [1, 0, 0]])
+                trans = np.mat([[translation.x], [translation.y], [translation.z]])
+                new_trans = trans_mat * trans
+
+                new_trans = new_trans.T + self.tf_init_trans
+
+                trans_mat = np.mat([[math.cos(p), 0, math.sin(p)], [0, 1, 0], [-math.sin(p), 0, -math.cos(p)]])
+                x_trans = np.mat([[0.125], [0], [0]])
+                x_trans = trans_mat * x_trans
+
+                new_trans += x_trans.T
+
+                self.sim.robot.sim_obj.translation = mn.Vector3(new_trans[0, 0], self.sim.robot.sim_obj.translation[1], new_trans[0, 2])
+
+        ########################################
+        # Services, Publishers and Subscribers
+        ########################################
+        # TODO: make pub_rate and queue_size configurable by constructor argument
+        # define the max rate at which we publish sensor readings
+        self.pub_rate = float(pub_rate)
+        # environment publish and subscribe queue size
+        self.sub_queue_size = 10
+        self.pub_queue_size = 10
+        # Services
+        self.services = {
+            'roam_service': rospy.Service(f"{PACKAGE_NAME}/{node_name}/{ServiceNames.ROAM}", Roam, self.on_roam),
+        }
+        # Topic Publishers
+        # we create one topic for each of RGB, Depth and GPS+Compass sensor
+        assert "HEAD_RGB_SENSOR" in self.config.SIMULATOR.AGENT_0.SENSORS
+        assert "HEAD_DEPTH_SENSOR" in self.config.SIMULATOR.AGENT_0.SENSORS
+        assert "POINTGOAL_WITH_GPS_COMPASS_SENSOR" in self.config.TASK.SENSORS
+        self.publishers = {
+            'pub_rgb': rospy.Publisher("/camera/color/image_raw", Image, queue_size=self.pub_queue_size),
+            'pub_third_rgb': rospy.Publisher("third_rgb", Image, queue_size=self.pub_queue_size),
+            'pub_camera_info_rgb': rospy.Publisher("/camera/color/camera_info", CameraInfo, queue_size=self.pub_queue_size),
+            'pub_depth': rospy.Publisher("/camera/aligned_depth_to_color/image_raw", Image, queue_size=self.pub_queue_size),
+            'pub_camera_info_depth': rospy.Publisher("/camera/aligned_depth_to_color/camera_info", CameraInfo, queue_size=self.pub_queue_size),
+            'pub_pointgoal_with_gps_compass': rospy.Publisher("pointgoal_with_gps_compass", PointGoalWithGPSCompass, queue_size=self.pub_queue_size),
+            'gps_pub': rospy.Publisher("gps", PointGoalWithGPSCompass, queue_size=self.pub_queue_size),
+            'imu_pub': rospy.Publisher("/imu/data_raw", Imu, queue_size=self.pub_queue_size),
+            'ray_pub': rospy.Publisher("/rplidar/scan", LaserScan, queue_size=self.pub_queue_size),
+            'odom_pub': rospy.Publisher("/ep/odom", Odometry, queue_size=self.pub_queue_size),
+            'gripper_state': rospy.Publisher("gripper_state", Point, queue_size=self.pub_queue_size),
+            'cube_pos_1': rospy.Publisher("/pose/cube_1", Pose, queue_size=self.pub_queue_size),
+            'cube_pos_2': rospy.Publisher("/pose/cube_2", Pose, queue_size=self.pub_queue_size),
+            'cube_pos_3': rospy.Publisher("/pose/cube_3", Pose, queue_size=self.pub_queue_size),
+            'cube_pos_4': rospy.Publisher("/pose/cube_4", Pose, queue_size=self.pub_queue_size),
+            'cube_pos_5': rospy.Publisher("/pose/cube_5", Pose, queue_size=self.pub_queue_size),
+            'ep_pos': rospy.Publisher("/pose/ep_world", Pose, queue_size=self.pub_queue_size),
+            'target_pos_1': rospy.Publisher("/position/target_1", Point, queue_size=self.pub_queue_size),
+            'target_pos_2': rospy.Publisher("/position/target_2", Point, queue_size=self.pub_queue_size),
+            'target_pos_3': rospy.Publisher("/position/target_3", Point, queue_size=self.pub_queue_size),
+            'exchange_markers': rospy.Publisher("/judgement/exchange_markers", String, queue_size=self.pub_queue_size),
+            'markers_time': rospy.Publisher("/judgement/markers_time", String, queue_size=self.pub_queue_size)
+        }
+        # Topic Subscribers
+        # subscribe from command topics
+        if self.use_continuous_agent:
+            self.subscribers = {
+                'tf_sub': rospy.Subscriber("/tf", TFMessage, on_tf_callback, queue_size=self.sub_queue_size),
+                'sub': rospy.Subscriber("cmd_vel", Twist, on_callback, queue_size=self.sub_queue_size),
+                'sub1': rospy.Subscriber("arm_gripper", Point, on_callback1, queue_size=self.sub_queue_size),
+                'sub2': rospy.Subscriber("arm_position", Pose, on_callback2, queue_size=self.sub_queue_size),
+                'sub3': rospy.Subscriber("cmd_position", Twist, on_callback3, queue_size=self.sub_queue_size),
+                'goal_sub': rospy.Subscriber("gps/goal", MoveBaseActionGoal, on_callback_gps, queue_size=self.sub_queue_size),
+            }
+        else:
+            self.subscribers = {
+                'tf_sub': rospy.Subscriber("/tf", TFMessage, on_tf_callback, queue_size=self.sub_queue_size),
+                'sub': rospy.Subscriber("action", Int16, on_callback, queue_size=self.sub_queue_size),
+                'goal_sub': rospy.Subscriber("gps/goal", MoveBaseActionGoal, on_callback_gps, queue_size=self.sub_queue_size),
+            }
+
+        ########################################
+        # Video recording
+        ########################################
         self.make_video = False
         self.observations_per_episode = []
         self.video_frame_counter = 0
         self.video_frame_period = 1  # NOTE: frame rate defined as x steps/frame
 
-        # set up logger
-        self.logger = utils_logging.setup_logger(self.node_name)
-
-        # establish evaluation service server
-        self.eval_service = rospy.Service(
-            f"{PACKAGE_NAME}/{node_name}/{ServiceNames.EVAL_EPISODE}",
-            EvalEpisode,
-            self.eval_episode,
-        )
-
-        # establish roam service server
-        self.roam_service = rospy.Service(f"{PACKAGE_NAME}/{node_name}/{ServiceNames.ROAM}", Roam, self.roam)
-
-        # define the max rate at which we publish sensor readings
-        self.pub_rate = float(pub_rate)
-
-        # environment publish and subscribe queue size
-        # TODO: make them configurable by constructor argument
-        self.sub_queue_size = 10
-        self.pub_queue_size = 10
-
-        # publish to sensor topics
-        # we create one topic for each of RGB, Depth and GPS+Compass
-        # sensor
-        if "HEAD_RGB_SENSOR" in self.config.SIMULATOR.AGENT_0.SENSORS:
-            self.pub_rgb = rospy.Publisher("/camera/color/image_raw", Image, queue_size=self.pub_queue_size)
-            self.pub_third_rgb = rospy.Publisher("third_rgb", Image, queue_size=self.pub_queue_size)
-            self.pub_camera_info_rgb = rospy.Publisher("/camera/color/camera_info", CameraInfo, queue_size=self.pub_queue_size)
-        if "HEAD_DEPTH_SENSOR" in self.config.SIMULATOR.AGENT_0.SENSORS:
-            if self.use_continuous_agent:
-                # if we are using a ROS-based agent, we publish depth images
-                # in type Image
-                self.pub_depth = rospy.Publisher("/camera/aligned_depth_to_color/image_raw", Image, queue_size=self.pub_queue_size)
-                # also publish depth camera info
-                self.pub_camera_info_depth = rospy.Publisher("/camera/aligned_depth_to_color/camera_info", CameraInfo, queue_size=self.pub_queue_size)
-            else:
-                # otherwise, we publish in type DepthImage to preserve as much
-                # accuracy as possible
-                self.pub_depth = rospy.Publisher("depth", DepthImage, queue_size=self.pub_queue_size)
-        if "POINTGOAL_WITH_GPS_COMPASS_SENSOR" in self.config.TASK.SENSORS:
-            self.pub_pointgoal_with_gps_compass = rospy.Publisher(
-                "pointgoal_with_gps_compass", PointGoalWithGPSCompass, queue_size=self.pub_queue_size)
-        self.gps_pub = rospy.Publisher("gps", PointGoalWithGPSCompass, queue_size=self.pub_queue_size)
-        # before: imu after: /imu/data_raw
-        self.imu_pub = rospy.Publisher("/imu/data_raw", Imu, queue_size=self.pub_queue_size)
-        self.imu_broadcaster = tf.TransformBroadcaster()
-        # before: ray after: /rplidar/scan
-        self.ray_pub = rospy.Publisher("/rplidar/scan", LaserScan, queue_size=self.pub_queue_size)
-        self.ray_broadcaster = tf.TransformBroadcaster()
-        # before: odom after: /ep/odom
-        self.odom_pub = rospy.Publisher("/ep/odom", Odometry, queue_size=self.pub_queue_size)
-        self.odom_broadcaster = tf.TransformBroadcaster()
-        self.gripper_state = rospy.Publisher("gripper_state", Point, queue_size=self.pub_queue_size)
-
-        self.cube_pos_1 = rospy.Publisher("/pose/cube_1", Pose, queue_size=self.pub_queue_size)
-        self.cube_pos_2 = rospy.Publisher("/pose/cube_2", Pose, queue_size=self.pub_queue_size)
-        self.cube_pos_3 = rospy.Publisher("/pose/cube_3", Pose, queue_size=self.pub_queue_size)
-        self.cube_pos_4 = rospy.Publisher("/pose/cube_4", Pose, queue_size=self.pub_queue_size)
-        self.cube_pos_5 = rospy.Publisher("/pose/cube_5", Pose, queue_size=self.pub_queue_size)
-        self.target_pos_1 = rospy.Publisher("/position/target_1", Point, queue_size=self.pub_queue_size)
-        self.target_pos_2 = rospy.Publisher("/position/target_2", Point, queue_size=self.pub_queue_size)
-        self.target_pos_3 = rospy.Publisher("/position/target_3", Point, queue_size=self.pub_queue_size)
-        self.ep_pos = rospy.Publisher("/pose/ep_world", Pose, queue_size=self.pub_queue_size)
-
-        self.tf_sub = rospy.Subscriber("/tf", TFMessage, self.tf_callback, queue_size=self.sub_queue_size)
-
-        print("\033[0;37;42mTarget Exchange Markers: \033[0m", self.listExchanges)
-        from std_msgs.msg import String
-        self.exchange_markers = rospy.Publisher("/judgement/exchange_markers", String, queue_size=self.pub_queue_size)
-
+        ########################################
+        # Miscellaneous
+        ########################################
         self.pre_pose_cube = []
         self.pre_buff_w_energy = []
         self.is_buff_still = True
-
         # [TODO] Flag, start_time in step(1)
-        NaN = float('nan')
-        self.markers_time_list = [NaN, NaN, NaN]
+        self.markers_time_list = [float('nan'), float('nan'), float('nan')]
         self.start_time = 0
-        self.markers_time = rospy.Publisher("/judgement/markers_time", String, queue_size=self.pub_queue_size)
-
         self.i_step = 0
 
-        # subscribe from command topics
-        if self.use_continuous_agent:
-            self.sub = rospy.Subscriber("cmd_vel", Twist, self.callback, queue_size=self.sub_queue_size)
-
-            self.sub1 = rospy.Subscriber("arm_gripper", Point, self.callback1, queue_size=self.sub_queue_size)
-
-            self.sub2 = rospy.Subscriber("arm_position", Pose, self.callback2, queue_size=self.sub_queue_size)
-
-            self.sub3 = rospy.Subscriber("cmd_position", Twist, self.callback3, queue_size=self.sub_queue_size)
-        else:
-            self.sub = rospy.Subscriber("action", Int16, self.callback, queue_size=self.sub_queue_size)
-
+        ########################################
+        # Wait for activation
+        ########################################
+        # TODO use a callback to activate start
         # wait until connections with the agent is established
         self.logger.info("env making sure agent is subscribed to sensor topics...")
-        while (self.pub_rgb.get_num_connections() == 0 or self.pub_depth.get_num_connections() == 0
-               # or self.pub_pointgoal_with_gps_compass.get_num_connections() == 0
-              ):
-            pass
-        self.goal_sub = rospy.Subscriber("gps/goal", MoveBaseActionGoal, self.callback_gps, queue_size=self.sub_queue_size)
+        # while (self.publishers['pub_rgb'].get_num_connections() == 0 or self.publishers['pub_depth'].get_num_connections() == 0
+        #        # or self.pub_pointgoal_with_gps_compass.get_num_connections() == 0
+        #       ):
+        #     pass
         self.logger.info("env initialized")
 
     def reset(self):
@@ -372,21 +469,6 @@ class HabitatEnvNode:
             with self.shutdown_lock:
                 if self.shutdown:
                     return
-
-            # locate the last episode specified
-            if self.episode_id_last != EvalEpisodeSpecialIDs.REQUEST_NEXT:
-                # iterate to the last episode. If not found, the loop exits upon a
-                # StopIteration exception
-                last_ep_found = False
-                while not last_ep_found:
-                    try:
-                        self.sim.reconfigure(self.config.SIMULATOR)
-                    except StopIteration:
-                        self.logger.info("Last episode not found!")
-                        raise StopIteration
-            else:
-                # evaluate from the next episode
-                pass
 
             # initialize timing variables
             with self.timing_lock:
@@ -410,82 +492,19 @@ class HabitatEnvNode:
             with self.command_cv:
                 self.count_steps = 0
 
-    def _enable_reset(self, request, enable_roam):
-        r"""
-        Helper method to set self.episode_id_last, self.scene_id_last,
-        enable reset and alert threads waiting for reset to be enabled.
-        :param request: request dictionary, should contain field
-            `episode_id_last` and `scene_id_last`.
-        :param enable_roam: if should enable free-roam mode or not.
-        """
+    def _enable_reset(self, request):
         with self.enable_reset_cv:
-            # unpack evaluator request
-            self.episode_id_last = str(request.episode_id_last)
-            self.scene_id_last = str(request.scene_id_last)
-
-            # enable (env) reset
             assert self.enable_reset is False
             self.enable_reset = True
-            self.enable_roam = enable_roam
             self.enable_reset_cv.notify()
 
     def _enable_evaluation(self):
-        r"""
-        Helper method to enable evaluation and alert threads waiting for evalu-
-        ation to be enabled.
-        """
         with self.enable_eval_cv:
             assert self.enable_eval is False
             self.enable_eval = True
             self.enable_eval_cv.notify()
 
-    def eval_episode(self, request):
-        r"""
-        ROS service handler which evaluates one episode and returns evaluation
-        metrics.
-        :param request: evaluation parameters provided by evaluator, including
-            last episode ID and last scene ID.
-        :return: 1) episode ID and scene ID; 2) metrics including distance-to-
-        goal, success and spl.
-        """
-        # make a response dict
-        resp = {
-            "episode_id": EvalEpisodeSpecialIDs.RESPONSE_NO_MORE_EPISODES,
-            "scene_id": "",
-            NumericalMetrics.DISTANCE_TO_GOAL: 0.0,
-            NumericalMetrics.SUCCESS: 0.0,
-            NumericalMetrics.SPL: 0.0,
-            NumericalMetrics.NUM_STEPS: 0,
-            NumericalMetrics.SIM_TIME: 0.0,
-            NumericalMetrics.RESET_TIME: 0.0,
-        }
-
-        if str(request.episode_id_last) == EvalEpisodeSpecialIDs.REQUEST_SHUTDOWN:
-            # if shutdown request, enable reset and return immediately
-            with self.shutdown_lock:
-                self.shutdown = True
-            with self.enable_reset_cv:
-                self.enable_reset = True
-                self.enable_reset_cv.notify()
-            return resp
-        else:
-            # if not shutting down, enable reset and evaluation
-            self._enable_reset(request=request, enable_roam=False)
-
-            # enable evaluation
-            self._enable_evaluation()
-
-            # wait for evaluation to be over
-            with self.enable_eval_cv:
-                while self.enable_eval is True:
-                    self.enable_eval_cv.wait()
-
-                    # no episode is evaluated. Toggle the flag so the env node
-                    # can be reused
-                self.all_episodes_evaluated = False
-                return resp
-
-    def roam(self, request):
+    def on_roam(self, request):
         r"""
         ROS service handler which allows an agent to roam freely within a scene,
         starting from the initial position of the specified episode.
@@ -493,7 +512,7 @@ class HabitatEnvNode:
         :return: acknowledge signal.
         """
         # if not shutting down, enable reset and evaluation
-        self._enable_reset(request=request, enable_roam=True)
+        self._enable_reset(request=request)
 
         # set video production flag
         self.make_video = request.make_video
@@ -561,38 +580,6 @@ class HabitatEnvNode:
 
         return observations_ros
 
-    def publish_sensor_observations(self):
-        r"""
-        Waits until evaluation is enabled, then publishes current simulator
-        sensor readings. Requires to be called 1) after simulator reset and
-        2) when evaluation has been enabled.
-        """
-        # pack observations in ROS message
-        observations_ros = self.obs_to_msgs(self.observations)
-        for sensor_uuid, _ in self.observations.items():
-            # we publish to each of RGB, Depth and Ptgoal/GPS+Compass sensor
-            if sensor_uuid == "robot_head_rgb":
-                self.pub_rgb.publish(observations_ros["robot_head_rgb"])
-            elif sensor_uuid == "robot_arm_rgb":
-                self.pub_third_rgb.publish(observations_ros["robot_arm_rgb"])
-            elif sensor_uuid == "robot_head_depth":
-                self.pub_depth.publish(observations_ros["robot_head_depth"])
-                if self.use_continuous_agent:
-                    self.pub_camera_info_rgb.publish(
-                        self.make_depth_camera_info_msg(
-                            observations_ros["robot_head_depth"].header,
-                            observations_ros["robot_head_depth"].height,
-                            observations_ros["robot_head_depth"].width,
-                        ))
-                    self.pub_camera_info_depth.publish(
-                        self.make_depth_camera_info_msg(
-                            observations_ros["robot_head_depth"].header,
-                            observations_ros["robot_head_depth"].height,
-                            observations_ros["robot_head_depth"].width,
-                        ))
-            elif sensor_uuid == "pointgoal_with_gps_compass":
-                self.pub_pointgoal_with_gps_compass.publish(observations_ros["pointgoal_with_gps_compass"])
-
     def make_depth_camera_info_msg(self, header, height, width):
         r"""
         Create camera info message for depth camera.
@@ -615,19 +602,35 @@ class HabitatEnvNode:
         camera_info_msg.P = [fx, 0, cx, 0, 0, fy, cy, 0, 0, 0, 1, 0]
         return camera_info_msg
 
-    def rotation_x(self, roll):
-        rotation = np.matrix([[1.0, 0.0, 0.0, 0.0], [0.0, math.cos(roll), math.sin(roll), 0.0], [0.0, -math.sin(roll),
-                                                                                                 math.cos(roll), 0.0], [0.0, 0.0, 0.0, 1.0]])
-        return rotation
-
-    def rotation_z(self, yaw):
-        rotation = np.matrix([[math.cos(yaw), math.sin(yaw), 0.0, 0.0], [-math.sin(yaw), math.cos(yaw), 0.0, 0.0], [0.0, 0.0, 1.0, 0.0],
-                              [0.0, 0.0, 0.0, 1.0]])
-        return rotation
-
-    def shift_mat(self, x, y, z):
-        shift = np.matrix([[1.0, 0.0, 0.0, x], [0.0, 1.0, 0.0, y], [0.0, 0.0, 1.0, z], [0.0, 0.0, 0.0, 1.0]])
-        return shift
+    def publish_sensor_observations(self):
+        r"""
+        Waits until evaluation is enabled, then publishes current simulator
+        sensor readings. Requires to be called 1) after simulator reset and
+        2) when evaluation has been enabled.
+        """
+        # pack observations in ROS message
+        observations_ros = self.obs_to_msgs(self.observations)
+        for sensor_uuid, _ in self.observations.items():
+            # we publish to each of RGB, Depth and Ptgoal/GPS+Compass sensor
+            if sensor_uuid == "robot_head_rgb":
+                self.publishers['pub_rgb'].publish(observations_ros["robot_head_rgb"])
+            elif sensor_uuid == "robot_arm_rgb":
+                self.publishers['pub_third_rgb'].publish(observations_ros["robot_arm_rgb"])
+            elif sensor_uuid == "robot_head_depth":
+                self.publishers['pub_depth'].publish(observations_ros["robot_head_depth"])
+                if self.use_continuous_agent:
+                    self.publishers['pub_camera_info_rgb'].publish(self.make_depth_camera_info_msg(
+                        observations_ros["robot_head_depth"].header,
+                        observations_ros["robot_head_depth"].height,
+                        observations_ros["robot_head_depth"].width,
+                    ))
+                    self.publishers['pub_camera_info_depth'].publish(self.make_depth_camera_info_msg(
+                        observations_ros["robot_head_depth"].header,
+                        observations_ros["robot_head_depth"].height,
+                        observations_ros["robot_head_depth"].width,
+                    ))
+            elif sensor_uuid == "pointgoal_with_gps_compass":
+                self.publishers['pub_pointgoal_with_gps_compass'].publish(observations_ros["pointgoal_with_gps_compass"])
 
     def step(self):
         r"""
@@ -817,7 +820,7 @@ class HabitatEnvNode:
                             self.sim.grasp_mgr.snap_to_obj(sim_idx)
                             grip_state = Point()
                             grip_state.x = 1
-                            self.gripper_state.publish(grip_state)
+                            self.publishers['gripper_state'].publish(grip_state)
                     self.switch = -1
                 elif self.switch == 0 and self.sim.grasp_mgr.is_grasped:
                     self.sim.grasp_mgr.desnap()
@@ -833,7 +836,7 @@ class HabitatEnvNode:
                         grip_state.x = 1
                     else:
                         grip_state.x = 0
-                    self.gripper_state.publish(grip_state)
+                    self.publishers['gripper_state'].publish(grip_state)
                 self.counter += 1
 
                 if self.init_move_pos[0] < 0.1 and self.init_move_pos[0] > -0.1:
@@ -892,12 +895,10 @@ class HabitatEnvNode:
                     origin = np.mat([[0.12], [0.15], [0]])
 
                     origin = trans_mat * origin
-                    ray.origin = mn.Vector3(origin[0, 0] + self.sim.robot.sim_obj.transformation[3][0], origin[1, 0],
-                                            origin[2, 0] + self.sim.robot.sim_obj.transformation[3][2])
+                    ray.origin = mn.Vector3(origin[0, 0] + self.sim.robot.sim_obj.transformation[3][0], origin[1, 0], origin[2, 0] + self.sim.robot.sim_obj.transformation[3][2])
 
                     for i in range(num_readings + 1, 0, -1):
-                        ray.direction = mn.Vector3(
-                            math.cos(i / num_readings * 2 * np.pi - th_world), 0, math.sin(i / num_readings * np.pi * 2 - th_world))
+                        ray.direction = mn.Vector3(math.cos(i / num_readings * 2 * np.pi - th_world), 0, math.sin(i / num_readings * np.pi * 2 - th_world))
                         #print(ray.direction)
                         raycast_results = self.sim.cast_ray(ray, 100)
                         #!                	scan.intensities.append(10*i)
@@ -911,7 +912,7 @@ class HabitatEnvNode:
                         if i > (num_readings - 1):
                             j = i - num_readings
                         scan.ranges[j] = float("inf")
-                    self.ray_pub.publish(scan)
+                    self.publishers['ray_pub'].publish(scan)
 
                 #time_end = rospy.Time.now()
                 #print("laser_scan: ", (time_end - time_start).to_sec())
@@ -987,7 +988,7 @@ class HabitatEnvNode:
                 imu_data.angular_velocity.z = angular_change * self.pub_rate
                 if float(imu_data.angular_velocity.z) > limits or float(imu_data.angular_velocity.z) < -limits:
                     imu_data.angular_velocity.z = self.last_angular_velocity
-                self.imu_pub.publish(imu_data)
+                self.publishers['imu_pub'].publish(imu_data)
 
                 #time_end = rospy.Time.now()
                 #print("imu: ", (time_end - time_start).to_sec())
@@ -1005,9 +1006,9 @@ class HabitatEnvNode:
                 gps_msg.header.stamp = self.current_time
                 gps_msg.header.frame_id = "gps"
                 angle_env2base = th_world + self.map_orientation
-                rotation_x = self.rotation_x(-np.pi / 2)
-                rotation_z = self.rotation_z(th_map + self.map_orientation)
-                shift_goal = self.shift_mat(-self.sim.robot.sim_obj.transformation[3][0], 0.0, -self.sim.robot.sim_obj.transformation[3][2])
+                rotation_x = rotate_x(-np.pi / 2)
+                rotation_z = rotate_z(th_map + self.map_orientation)
+                shift_goal = shift(-self.sim.robot.sim_obj.transformation[3][0], 0.0, -self.sim.robot.sim_obj.transformation[3][2])
                 transf = rotation_z * rotation_x * shift_goal
                 goal_on_map = transf * self.goal_position
                 r"""
@@ -1040,7 +1041,7 @@ class HabitatEnvNode:
 
 #                print("d:",gps_msg.distance_to_goal)
 #                print("a:",gps_msg.angle_to_goal)
-                self.gps_pub.publish(gps_msg)
+                self.publishers['gps_pub'].publish(gps_msg)
 
                 #time_end = rospy.Time.now()
                 #print("gps: ", (time_end - time_start).to_sec())
@@ -1053,8 +1054,7 @@ class HabitatEnvNode:
                 movement_z = self.sim.robot.sim_obj.transformation[3][2] - self.robot_init_pos[2]
                 odom_th = th_map
 
-                transformation_mat = np.mat([[math.cos(self.robot_init_ang), 0, -math.sin(self.robot_init_ang)],
-                                             [-math.sin(self.robot_init_ang), 0, -math.cos(self.robot_init_ang)], [0, 1, 0]])
+                transformation_mat = np.mat([[math.cos(self.robot_init_ang), 0, -math.sin(self.robot_init_ang)], [-math.sin(self.robot_init_ang), 0, -math.cos(self.robot_init_ang)], [0, 1, 0]])
 
                 curr_pos_trans = transformation_mat * np.mat([[movement_x], [0], [movement_z]])
 
@@ -1101,7 +1101,7 @@ class HabitatEnvNode:
                     odom.child_frame_id = "base_link"
                     odom.twist.twist = Twist(Vector3(vx, vy, 0), Vector3(0, 0, vth))
 
-                    self.odom_pub.publish(odom)
+                    self.publishers['odom_pub'].publish(odom)
 
                 self.prev_odom = [odom_x, odom_y, odom_th]
                 self.last_time = self.current_time
@@ -1140,7 +1140,7 @@ class HabitatEnvNode:
                 pose_cube_1.orientation.y = rot_1.vector.y
                 pose_cube_1.orientation.z = rot_1.vector.z
                 pose_cube_1.orientation.w = rot_1.scalar
-                self.cube_pos_1.publish(pose_cube_1)
+                self.publishers['cube_pos_1'].publish(pose_cube_1)
 
                 pos_2 = self.sim.get_translation(3)
                 rot_2 = self.sim.get_rotation(3)
@@ -1152,7 +1152,7 @@ class HabitatEnvNode:
                 pose_cube_2.orientation.y = rot_2.vector.y
                 pose_cube_2.orientation.z = rot_2.vector.z
                 pose_cube_2.orientation.w = rot_2.scalar
-                self.cube_pos_2.publish(pose_cube_2)
+                self.publishers['cube_pos_2'].publish(pose_cube_2)
 
                 pos_3 = self.sim.get_translation(5)
                 rot_3 = self.sim.get_rotation(5)
@@ -1164,7 +1164,7 @@ class HabitatEnvNode:
                 pose_cube_3.orientation.y = rot_3.vector.y
                 pose_cube_3.orientation.z = rot_3.vector.z
                 pose_cube_3.orientation.w = rot_3.scalar
-                self.cube_pos_3.publish(pose_cube_3)
+                self.publishers['cube_pos_3'].publish(pose_cube_3)
 
                 pos_4 = self.sim.get_translation(7)
                 rot_4 = self.sim.get_rotation(7)
@@ -1176,7 +1176,7 @@ class HabitatEnvNode:
                 pose_cube_4.orientation.y = rot_4.vector.y
                 pose_cube_4.orientation.z = rot_4.vector.z
                 pose_cube_4.orientation.w = rot_4.scalar
-                self.cube_pos_4.publish(pose_cube_4)
+                self.publishers['cube_pos_4'].publish(pose_cube_4)
 
                 pos_5 = self.sim.get_translation(9)
                 rot_5 = self.sim.get_rotation(9)
@@ -1188,7 +1188,7 @@ class HabitatEnvNode:
                 pose_cube_5.orientation.y = rot_5.vector.y
                 pose_cube_5.orientation.z = rot_5.vector.z
                 pose_cube_5.orientation.w = rot_5.scalar
-                self.cube_pos_5.publish(pose_cube_5)
+                self.publishers['cube_pos_5'].publish(pose_cube_5)
 
                 pos_box = self.recive_box.translation
                 rot_box = self.recive_box.rotation
@@ -1197,19 +1197,19 @@ class HabitatEnvNode:
                 pose_target_1.x = pos_box.x - 0.125
                 pose_target_1.y = pos_box.y + 0.085
                 pose_target_1.z = pos_box.z
-                self.target_pos_1.publish(pose_target_1)
+                self.publishers['target_pos_1'].publish(pose_target_1)
 
                 pose_target_2 = Point()
                 pose_target_2.x = pos_box.x
                 pose_target_2.y = pos_box.y + 0.085
                 pose_target_2.z = pos_box.z
-                self.target_pos_2.publish(pose_target_2)
+                self.publishers['target_pos_2'].publish(pose_target_2)
 
                 pose_target_3 = Point()
                 pose_target_3.x = pos_box.x + 0.125
                 pose_target_3.y = pos_box.y + 0.085
                 pose_target_3.z = pos_box.z
-                self.target_pos_3.publish(pose_target_3)
+                self.publishers['target_pos_3'].publish(pose_target_3)
 
                 trans_box = self.recive_box.transformation
 
@@ -1235,7 +1235,7 @@ class HabitatEnvNode:
                 pose_ep.orientation.y = self.sim.robot.sim_obj.rotation.vector.y
                 pose_ep.orientation.z = self.sim.robot.sim_obj.rotation.vector.z
                 pose_ep.orientation.w = self.sim.robot.sim_obj.rotation.scalar
-                self.ep_pos.publish(pose_ep)
+                self.publishers['ep_pos'].publish(pose_ep)
 
                 trans_buff = self.energy_buff.transformation
                 rot_buff = self.energy_buff.rotation
@@ -1286,7 +1286,7 @@ class HabitatEnvNode:
                 target_box_z_bound = 0.06
                 # the target_z and target_box x/y related need to set
                 str = ', '.join('%s' % marker for marker in self.listExchanges)
-                self.exchange_markers.publish(str)
+                self.publishers['exchange_markers'].publish(str)
 
                 def within_bound(Pos, Target, bound):
                     return (Pos > Target - bound) and (Pos < Target + bound)
@@ -1337,7 +1337,7 @@ class HabitatEnvNode:
                                         self.markers_time_list[idx] = None
 
                 str = ', '.join('%s' % marker for marker in self.markers_time_list)
-                self.markers_time.publish(str)
+                self.publishers['markers_time'].publish(str)
 
                 self.pre_pose_cube = pose_cube
 
@@ -1376,36 +1376,6 @@ class HabitatEnvNode:
         with self.command_cv:
             self.count_steps += 1
 
-    def publish_and_step_for_eval(self):
-        r"""
-        Complete an episode and alert eval_episode() upon completion. Requires
-        to be called after simulator reset.
-        """
-        # publish observations at fixed rate
-        r = rospy.Rate(self.pub_rate)
-        with self.enable_eval_cv:
-            # wait for evaluation to be enabled
-            while self.enable_eval is False:
-                self.enable_eval_cv.wait()
-
-            # publish observations and step until the episode ends
-            while True:
-                #time_start = rospy.Time.now()
-                self.publish_sensor_observations()
-                #time_end = rospy.Time.now()
-                #print("obs_time: ", (time_end - time_start).to_sec())
-
-                #time_start = rospy.Time.now()
-                self.step()
-                #time_end = rospy.Time.now()
-                #print("step_time: ", (time_end - time_start).to_sec())
-                #print("#############################################################")
-                r.sleep()
-
-            # now the episode is done, disable evaluation and alert eval_episode()
-            self.enable_eval = False
-            self.enable_eval_cv.notify()
-
     def publish_and_step_for_roam(self):
         r"""
         Let an agent roam within a scene until shutdown. Requires to be called
@@ -1421,115 +1391,18 @@ class HabitatEnvNode:
 
             # publish observations and step until shutdown
             while True:
+                print('step')
                 with self.shutdown_lock:
                     if self.shutdown:
                         break
-                #time_start = rospy.Time.now()
                 self.publish_sensor_observations()
+                self.step()
+                r.sleep()
                 #time_end = rospy.Time.now()
                 #print("obs_time: ", (time_end - time_start).to_sec())
 
-                #time_start = rospy.Time.now()
-                self.step()
-                #time_end = rospy.Time.now()
-                #print("step_time: ", (time_end - time_start).to_sec())
-                #print("#############################################################")
-                r.sleep()
-
             # disable evaluation
             self.enable_eval = False
-
-    def callback(self, cmd_msg):
-        r"""
-        Takes in a command from an agent and alert the simulator to enact
-        it.
-        :param cmd_msg: Either a velocity command or an action command.
-        """
-        # unpack agent action from ROS message, and send the action
-        # to the simulator
-        with self.command_cv:
-            if self.use_continuous_agent:
-                # set linear + angular velocity
-                self.linear_vel = np.array([-cmd_msg.linear.y, 0.0, -cmd_msg.linear.x])
-                self.angular_vel = np.array([0.0, cmd_msg.angular.z, 0.0])
-                #self.arm_action_cfg = [cmd_msg.angular.x, cmd_msg.angular.y]
-                #self.switch = cmd_msg.linear.z
-            else:
-                # get the action
-                self.action = cmd_msg.data
-
-            # set action publish flag and notify
-            self.new_command_published = True
-            self.command_cv.notify()
-
-    def callback_gps(self, gps_data):
-        self.goal_position = np.matrix([[gps_data.goal.target_pose.pose.position.x], [gps_data.goal.target_pose.pose.position.y],
-                                        [gps_data.goal.target_pose.pose.position.z], [1.0]])
-        self.goal_rotation = gps_data.goal.target_pose.pose.orientation
-
-    def tf_callback(self, cmd_msg):
-        if cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_A655F116' or cmd_msg.transforms[
-                0].child_frame_id == 'tracker_LHR_28F9E075' or cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_79DF4EBF' or cmd_msg.transforms[
-                    0].child_frame_id == 'tracker_LHR_38294716':
-            translation = cmd_msg.transforms[0].transform.translation
-            rotation = cmd_msg.transforms[0].transform.rotation
-
-            r, p, y = self.quat2ang(rotation.x, rotation.y, rotation.z, rotation.w)
-            p += 1.57
-            if r < 0:
-                p = -p
-            p += 1.57
-            w, x, y, z = self.ang2quat(0, p, 0)
-
-            self.sim.robot.sim_obj.rotation = mn.Quaternion(mn.Vector3(x, y, z), w)
-
-            trans_mat = np.mat([[0, 0, -1], [0, 1, 0], [1, 0, 0]])
-            trans = np.mat([[translation.x], [translation.y], [translation.z]])
-            new_trans = trans_mat * trans
-
-            new_trans = new_trans.T + self.tf_init_trans
-
-            trans_mat = np.mat([[math.cos(p), 0, math.sin(p)], [0, 1, 0], [-math.sin(p), 0, -math.cos(p)]])
-            x_trans = np.mat([[0.125], [0], [0]])
-            x_trans = trans_mat * x_trans
-
-            new_trans += x_trans.T
-
-            self.sim.robot.sim_obj.translation = mn.Vector3(new_trans[0, 0], self.sim.robot.sim_obj.translation[1], new_trans[0, 2])
-
-    def callback1(self, cmd_msg):
-        with self.command_cv:
-            self.switch = cmd_msg.x
-
-    def callback2(self, cmd_msg):
-        with self.command_cv:
-            self.arm_action_cfg = [cmd_msg.position.x * 1000, cmd_msg.position.y * 1000]
-
-    def callback3(self, cmd_msg):
-        with self.command_cv:
-            self.init_move_pos = [cmd_msg.linear.x, -cmd_msg.linear.y, cmd_msg.angular.z]
-
-    def quat2ang(self, x, y, z, w):
-        r = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
-        p = math.asin(2 * (w * y - z * x))
-        y = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
-        return r, p, y
-
-    def ang2quat(self, r, p, y):
-        sinp = math.sin(p / 2)
-        siny = math.sin(y / 2)
-        sinr = math.sin(r / 2)
-
-        cosp = math.cos(p / 2)
-        cosy = math.cos(y / 2)
-        cosr = math.cos(r / 2)
-
-        w = cosr * cosp * cosy + sinr * sinp * siny
-        x = sinr * cosp * cosy - cosr * sinp * siny
-        y = cosr * sinp * cosy + sinr * cosp * siny
-        z = cosr * cosp * siny - sinr * sinp * cosy
-
-        return w, x, y, z
 
     def simulate(self):
         r"""
@@ -1538,31 +1411,15 @@ class HabitatEnvNode:
         or 2) let the agent roam freely in one episode.
         Breaks upon receiving shutdown command.
         """
-        # iterate over episodes
         while True:
-            try:
-                # reset the env
-                self.reset()
-                with self.shutdown_lock:
-                    # if shutdown service called, exit
-                    if self.shutdown:
-                        rospy.signal_shutdown("received request to shut down")
-                        break
-                with self.enable_reset_cv:
-                    if self.enable_roam:
-                        self.publish_and_step_for_roam()
-                    else:
-                        # otherwise, evaluate the episode
-                        self.publish_and_step_for_eval()
-            except StopIteration:
-                # set enable_reset and enable_eval to False, so the
-                # env node can evaluate again in the future
-                with self.enable_reset_cv:
-                    self.enable_reset = False
-                with self.enable_eval_cv:
-                    self.all_episodes_evaluated = True
-                    self.enable_eval = False
-                    self.enable_eval_cv.notify()
+            self.reset()
+            with self.shutdown_lock:
+                if self.shutdown:
+                    rospy.signal_shutdown("received request to shut down")
+                    break
+            # TODO check
+            # with self.enable_reset_cv:
+            self.publish_and_step_for_roam()
 
     def on_exit_generate_video(self):
         r"""
