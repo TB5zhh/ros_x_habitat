@@ -1391,7 +1391,7 @@ class HabitatEnvNode:
 
             # publish observations and step until shutdown
             while True:
-                print('step')
+                # print('step')
                 with self.shutdown_lock:
                     if self.shutdown:
                         break
