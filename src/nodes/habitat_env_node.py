@@ -300,7 +300,7 @@ class HabitatEnvNode:
 
         self.observations = None
 
-        def on_callback(self, cmd_msg):
+        def on_callback(cmd_msg):
             with self.command_cv:
                 if self.use_continuous_agent:
                     # set linear + angular velocity
@@ -316,23 +316,23 @@ class HabitatEnvNode:
                 self.new_command_published = True
                 self.command_cv.notify()
 
-        def on_callback1(self, cmd_msg):
+        def on_callback1(cmd_msg):
             with self.command_cv:
                 self.switch = cmd_msg.x
 
-        def on_callback2(self, cmd_msg):
+        def on_callback2(cmd_msg):
             with self.command_cv:
                 self.arm_action_cfg = [cmd_msg.position.x * 1000, cmd_msg.position.y * 1000]
 
-        def on_callback3(self, cmd_msg):
+        def on_callback3(cmd_msg):
             with self.command_cv:
                 self.init_move_pos = [cmd_msg.linear.x, -cmd_msg.linear.y, cmd_msg.angular.z]
 
-        def on_callback_gps(self, gps_data):
+        def on_callback_gps(gps_data):
             self.goal_position = np.matrix([[gps_data.goal.target_pose.pose.position.x], [gps_data.goal.target_pose.pose.position.y], [gps_data.goal.target_pose.pose.position.z], [1.0]])
             self.goal_rotation = gps_data.goal.target_pose.pose.orientation
 
-        def on_tf_callback(self, cmd_msg):
+        def on_tf_callback(cmd_msg):
             if cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_A655F116' or cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_28F9E075' or cmd_msg.transforms[0].child_frame_id == 'tracker_LHR_79DF4EBF' or cmd_msg.transforms[
                     0].child_frame_id == 'tracker_LHR_38294716':
                 translation = cmd_msg.transforms[0].transform.translation
