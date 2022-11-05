@@ -28,28 +28,56 @@ The package allows roboticists to
 ## Installation
 1. Install Ubuntu 20.04 + ROS Noetic.
 2. Install [Anaconda](https://www.anaconda.com/). 
-3. Install [Habitat Sim](https://github.com/facebookresearch/habitat-sim) following the official instructions. Note that
-    * We suggest you to use the version tagged `0.2.0`. Any versions below this is not supported;
-    * We also suggest install by building from the source;
-    * Install with Bullet Physics;
-    * If you have an NVIDIA card, we suggest you to install with CUDA.
-4. Install [Habitat Lab](https://github.com/facebookresearch/habitat-lab) in the same conda environment following the official instructions. Note that
-    * We suggest you to use the version tagged `0.2.0`. Any versions below this is not supported;
+3. Install [Habitat Sim](https://github.com/facebookresearch/habitat-sim) version `0.2.0`. 
+    * Here we show how to install it from conda. First download the code base, then reset the head to version 0.2.0, create a conda environment and install dependent packages:
+        ```
+        conda create -n rosxhab python=3.6 cmake=3.14.0
+        conda activate rosxhab
+        cd <path to Habitat Sim's root directory>
+        pip install -r requirements.txt
+        conda install habitat-sim=0.2.0 withbullet -c conda-forge -c aihabitat
+        ```
+    * If installing from conda doesn't work, you can also try building from source with Bullet Physics and CUDA support (if you have an NVIDIA card).
+4. Install [Habitat Lab](https://github.com/facebookresearch/habitat-lab) version `0.2.0` in the same conda environment following the official instructions. Note that
     * In addition to the core of Habitat Lab, also install `habitat_baselines` and other required packages.
+    * The `requirements.txt` provided in the official repo does not seem to cover the entire set of packages required to set up Habitat Lab. We had to install these pacakges manually:
+        ```
+        pip install Cython==0.29.30
+        pip install pkgconfig==1.5.5
+        ```
 5. Install the following ROS packages:
    * `ros-noetic-depthimage-to-laserscan`
    * `ros-noetic-laser-scan-matcher`
    * `ros-noetic-rtabmap-ros`
+   * `ros-noetic-hector-slam`
    * `ros-noetic-joy`
-6. Clone the repo to your catkin workspace.
+   * `ros-noetic-turtlebot3-gazebo`
+   * `ros-noetic-turtlebot3-bringup`
+6. Clone the repo to the `src/` directory under your catkin workspace.
 7. Compile the package by calling `catkin_make`.
-8. Export the repo's directory to `$PYTHONPATH`:
-   ```
-   export PYTHONPATH=$PYTHONPATH:<path-to-the-root-directory-of-the-repo>
-   ```
+8. Install Python pacakges required by this repo:
+    ```
+    pip install -r requirements.txt
+    ```
 
 ## Examples
-Here we outline steps to reproduce experiments from our paper.
+Here we outline steps to reproduce experiments from our paper. 
+
+### Environment Setup
+To set up your bash environment before you run any experiment, do the following:
+1. Activate your conda environment (if you are running any script/node from this codebase).
+2. Export the repo's directory to `$PYTHONPATH`:
+   ```
+   export PYTHONPATH=$PYTHONPATH:<path to the root directory of this repo>
+   ```
+   In fact for convenience, you can create a command in your `$HOME/.bashrc`:
+   ```
+   alias erosxhab="export PYTHONPATH=$PYTHONPATH:<path to the root directory of this repo>"
+   ```
+3. Source ROS-related environment variables. Similarly we can create a command to do this:
+   ```
+   alias sros="source /opt/ros/noetic/setup.bash && source <path to catkin_ws/devel>/setup.sh"
+   ```
 
 ### Navigating Habitat Agent in Habitat Sim without ROS (+/-Physics, -ROS)
 We can attempt to reproduce experiments from the [Habitat v1 paper](https://arxiv.org/abs/1904.01201) by evaluating a Habitat agent's performance in a MatterPort3D test scenario. Note that unlike what the authors did in the paper, we used
@@ -70,14 +98,66 @@ To run an evaluation, follow these steps:
    4. Select from `seeds/` a seed file or create one of your own for your experiment. The seed is used for initializing the Habitat agent.
    5. Run the following command to evaluate the agent over the test episodes while producing top-down maps and box plots to visualize metrics:
       ```
-      python src/scripts/eval_and_vis_habitat.py --input-type rgbd --model-path data/checkpoints/v2/gibson-rgbd-best.pth --task-config <path to config file> --episode-id <ID of last episode evaluated; -1 to evaluate from start> --seed-file-path <path to seed file> --log-dir <path to dir storing evaluation logs> --make-maps --map-dir <path to dir storing top-down maps> --make-plots --plot-dir <path to dir storing metric plots>
+      python src/scripts/eval_and_vis_habitat.py \
+      --input-type rgbd \
+      --model-path data/checkpoints/v2/gibson-rgbd-best.pth \
+      --task-config <path to config file> \
+      --episode-id <ID of last episode evaluated; -1 to evaluate from start> \
+      --seed-file-path <path to seed file> \
+      --log-dir <path to dir storing evaluation logs> \
+      --make-maps \
+      --map-dir <path to dir storing top-down maps> \
+      --make-plots \
+      --plot-dir <path to dir storing metric plots>
       ```
 
 ### Navigating Habitat Agent in Habitat Sim with ROS (+/-Physics, +ROS)
-Coming soon
+Under this mode we run a Habitat Agent still inside Habitat Sim but through our interface.
+
+   1. Select an experiment configuration file from `configs/`. Our configurations are coded by numbers:
+      * Setting 3: -Physics, +ROS;
+      * Setting 5: +Physics, +ROS.
+   2. Select a seed file (as above).
+   3. Run:
+      ```
+      python src/scripts/eval_habitat_ros.py \
+      --input-type rgbd \
+      --model-path data/checkpoints/v2/gibson-rgbd-best.pth \
+      --task-config configs/setting_5_configs/pointnav_rgbd-mp3d_with_physics.yaml \
+      --episode-id <ID of last episode evaluated; -1 to evaluate from start> \
+      --seed-file-path <seed file path> \
+      --log-dir= <log dir path>
+      ```
 
 ### Navigating Habitat Agent in Gazebo
-Coming soon
+Here we demonstrate steps to posit a Habitat agent embodied on a TurtleBot in a Gazebo-simulated environment, and render sensor data with RViz.
+   1. Define the model for the TurtleBot (here we use "Waffle"):
+      ```
+      export TURTLEBOT3_MODEL="waffle" 
+      ```
+   2. Launch Gazebo and RViz:
+      ```
+      roslaunch turtlebot3_gazebo turtlebot3_house.launch
+      roslaunch turtlebot3_gazebo turtlebot3_gazebo_rviz.launch 
+      ```
+   3. Launch the agent node:
+      ```
+      python src/nodes/habitat_agent_node.py \
+      --node-name agent_node \
+      --input-type rgbd \
+      --model-path data/checkpoints/v2/gibson-rgbd-best.pth 
+      ```
+      Then reset the agent in a separate window:
+      ```
+      rosservice call /ros_x_habitat/agent_node/reset_agent "{reset: 0, seed: 0}" 
+      ```
+   4. Launch the converter nodes:
+      ```
+      python src/nodes/habitat_agent_to_gazebo.py
+      python src/nodes/gazebo_to_habitat_agent.py \
+      --pointgoal-location <coordinates>
+      ```
+   5. In RViz, subscribe to topic `/camera/depth/image_raw` and `/camera/rgb/image_raw` to render observations from the RGB and the depth sensor.
 
 ### Navigating ROS Agent in Habitat Sim
 Here we outline steps to control a ROS agent with RGBD sensors via a joystick in a Habitat Sim-simulated scene.
@@ -93,19 +173,33 @@ Here we outline steps to control a ROS agent with RGBD sensors via a joystick in
       python src/scripts/roam_with_joy.py --hab-env-config-path <config file path> --episode-id <ID of episode to roam inside> --scene-id <path to the episode's scene file, e.g. data/scene_datasets/mp3d/2t7WUuJeko7/2t7WUuJeko7.glb> --video-frame-period <number of continuous steps for each frame recorded>
       ```
 
-We will soon update steps to run a planner from `rtabmap_ros` in Habitat Sim.
+Up to this step we have initialized a Habitat sim environment to be mapped and a joystick-controlled agent. Next, we build a map with `rtabmap_ros`, and let a ROS planner move to a goal location:
+   1. Run
+      ```
+      roslaunch launch/rtabmap_mapping.launch
+      ```
+      Map the environment and save the map to somewhere. We have some pre-built maps of Habitat
+      test scenes and Matterport 3D environments under `maps/`.
+   2. Run
+      ```
+      roslaunch launch/move_base.launch
+      ```
+      To start the planenr. The launcher file should also start a GUI environment which allows you to specify the goal point.
+      NOTE: make sure `map_file_path` and `map_file_base_name` have been set correctly before you run.
+
+## Tested Platforms
+The experiments were run on a desktop with  i7-10700K CPU, 64 GB of RAM, and an NVIDIA
+RTX 3070 GPU. We also tested the experiments on a desktop with 32 GB of RAM and an NVIDIA GT 1030 GPU.
 
 ## Cite Our Work
-If you are interested in using ``ros_x_habitat`` for your own research, please cite [our (Arxiv preprint) paper](https://arxiv.org/abs/2109.07703):
+If you are interested in using ``ros_x_habitat`` for your own research, please cite [our CRV 2022 paper](https://arxiv.org/abs/2109.07703):
 ```
-@misc{chen2021rosxhabitat,
-      title={ROS-X-Habitat: Bridging the ROS Ecosystem with Embodied AI}, 
-      author={Guanxiong Chen and Haoyu Yang and Ian M. Mitchell},
-      year={2021},
-      eprint={2109.07703},
-      archivePrefix={arXiv},
-      primaryClass={cs.RO}
-}
+@INPROCEEDINGS{9867069,  
+author={Chen, Guanxiong and Yang, Haoyu and Mitchell, Ian M.},  
+booktitle={2022 19th Conference on Robots and Vision (CRV)},  
+title={ROS-X-Habitat: Bridging the ROS Ecosystem with Embodied AI},  
+year={2022},  volume={},  number={},  pages={24-31},  
+doi={10.1109/CRV55824.2022.00012}}
 ```
 
 ## License
